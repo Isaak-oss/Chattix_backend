@@ -1,0 +1,55 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Post } from './post.entity';
+import { paginate } from '@common/lib/paginate/paginate';
+import { PaginationDto } from '@common/lib/paginate/paginate.dto';
+import { CreatePostDto } from './post.dto';
+
+@Injectable()
+export class PostService {
+  constructor(
+    @InjectRepository(Post)
+    private postRepository: Repository<Post>,
+  ) {}
+
+  getAllFeed(paginationDto: PaginationDto) {
+    const qb = this.postRepository
+      .createQueryBuilder('post')
+      .leftJoinAndSelect('post.author', 'author');
+    return paginate(qb, paginationDto);
+  }
+
+  getMyPosts(userId: ID, paginationDto: PaginationDto) {
+    const qb = this.postRepository
+      .createQueryBuilder('post')
+      .where('post.authorId = :userId', { userId });
+    return paginate(qb, paginationDto);
+  }
+
+  async create(createPostDto: CreatePostDto, userId: ID) {
+    const post = this.postRepository.create({ ...createPostDto, authorId: userId });
+    return this.postRepository.save(post);
+  }
+
+  async update(id: ID, createPostDto: CreatePostDto) {
+    const post = await this.findOne(id);
+    Object.assign(post, createPostDto);
+    return this.postRepository.save(post);
+  }
+
+  async remove(id: ID) {
+    const post = await this.findOne(id);
+    return this.postRepository.remove(post);
+  }
+
+  async findOne(postId: ID) {
+    const post = await this.postRepository.findOne({ where: { id: postId } });
+
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    return post;
+  }
+}
