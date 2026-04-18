@@ -34,3 +34,11 @@ export class ForgotPasswordDto {
   @IsString()
   newPassword: string;
 }
+
+export class SignInResponseDto {
+  access_token: string;
+}
+
+export class SignInWithGoogleDto {
+  googleToken: string;
+}

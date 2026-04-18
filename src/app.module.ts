@@ -3,10 +3,11 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { typeOrmConfig } from 'common/configs/database.config';
+import { typeOrmConfig } from '@common/configs/database.config';
 import { AuthModule } from '@modules/auth/auth.module';
-import { PostModule } from 'modules/post/post.module';
-import { UserModule } from 'modules/user/user.module';
+import { PostModule } from '@modules/post/post.module';
+import { UserModule } from '@modules/user/user.module';
+import { FriendModule } from '@modules/friend/friend.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { UserModule } from 'modules/user/user.module';
     AuthModule,
     PostModule,
     UserModule,
+    FriendModule,
   ],
   controllers: [AppController],
   providers: [AppService],

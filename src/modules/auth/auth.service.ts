@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { ForgotPasswordDto, SignInDto, SignUpDto } from './auth.dto';
+import { ForgotPasswordDto, SignInDto, SignInResponseDto, SignUpDto } from './auth.dto';
 import { User } from '../user/user.entity';
 
 @Injectable()
@@ -12,7 +12,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  private issueToken(user: User) {
+  private issueToken(user: User): SignInResponseDto {
     const payload = { id: user.id, email: user.email };
     return {
       access_token: this.jwtService.sign(payload),
@@ -24,8 +24,12 @@ export class AuthService {
 
     const user = await this.userService.getOneWithPassword(email);
 
-    // --- Google account verification ---
+    if (!user) {
+      throw new BadRequestException('Credentials do not match');
+    }
+
     if (!withOutPassword && !user.password) {
+      // --- Google account verification ---
       throw new BadRequestException('Account registered with Google');
     }
 
@@ -46,7 +50,7 @@ export class AuthService {
 
   async signUp(signUpDto: SignUpDto & { withOutPassword?: boolean }) {
     const { email, password, withOutPassword, ...rest } = signUpDto;
-    const hasUser = await this.userService.findOne(email);
+    const hasUser = await this.userService.findOne(email, false);
 
     if (hasUser) {
       throw new BadRequestException('User with this email already exists');

@@ -28,8 +28,11 @@ export class UserService {
   async findOne(email: string): Promise<User>;
   async findOne(email: string, checkForNotFound: false): Promise<User | null>;
   async findOne(email: string, checkForNotFound?: boolean): Promise<User | null> {
+    const shouldThrow = checkForNotFound ?? true;
+
     const user = await this.userRepository.findOne({ where: { email } });
-    if (!user && !checkForNotFound) {
+
+    if (!user && !shouldThrow) {
       return null;
     } else if (!user) {
       throw new NotFoundException('User not found');
@@ -43,9 +46,7 @@ export class UserService {
       where: { email },
       select: ['password', 'email', 'id'],
     });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+
     return user;
   }
 }

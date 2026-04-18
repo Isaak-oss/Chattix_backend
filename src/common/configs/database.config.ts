@@ -13,3 +13,4 @@ export const typeOrmConfig: DataSourceOptions = {
   entities: [__dirname + '/../../**/*.entity.{js,ts}'],
   synchronize: true,
 };
+

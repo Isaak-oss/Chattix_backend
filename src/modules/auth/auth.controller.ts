@@ -1,6 +1,11 @@
 import { Body, Controller, Post, UseInterceptors } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { ForgotPasswordDto, SignInDto, SignUpDto } from './auth.dto';
+import {
+  ForgotPasswordDto,
+  SignInDto,
+  SignInWithGoogleDto,
+  SignUpDto,
+} from './auth.dto';
 import { SetAccessTokenInterceptor } from '@common/interceptors/cookie.interceptor';
 
 @UseInterceptors(SetAccessTokenInterceptor)
@@ -29,7 +34,7 @@ export class AuthController {
   }
 
   @Post('signInWithGoogle')
-  signInWithGoogle(@Body() body: { googleToken: string }) {
+  signInWithGoogle(@Body() body: SignInWithGoogleDto) {
     return this.authService.signInWithGoogle(body.googleToken);
   }
 }

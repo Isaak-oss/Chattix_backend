@@ -1,6 +1,14 @@
-import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Post } from '../post/post.entity';
 import { Exclude } from 'class-transformer';
+import { Friend } from '@modules/friend/friend.entity';
 
 @Entity()
 export class User {
@@ -25,4 +33,16 @@ export class User {
 
   @OneToMany(() => Post, (post) => post.author)
   posts: Post[];
+
+  @OneToMany(() => Friend, (friend) => friend.requester)
+  sentRequests: Friend[];
+
+  @OneToMany(() => Friend, (friend) => friend.receiver)
+  receivedRequests: Friend[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
