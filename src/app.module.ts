@@ -8,6 +8,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { PostModule } from '@modules/post/post.module';
 import { UserModule } from '@modules/user/user.module';
 import { FriendModule } from '@modules/friend/friend.module';
+import { NotificationModule } from '@modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { FriendModule } from '@modules/friend/friend.module';
     PostModule,
     UserModule,
     FriendModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

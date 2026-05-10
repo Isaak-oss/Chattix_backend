@@ -9,12 +9,14 @@ import { Repository } from 'typeorm';
 import { Friend, FriendStatus } from '@modules/friend/friend.entity';
 import { paginate } from '@common/lib/paginate/paginate';
 import { PaginationDto } from '@common/lib/paginate/paginate.dto';
+import { NotificationService } from '@modules/notification/notification.service';
 
 @Injectable()
 export class FriendService {
   constructor(
     @InjectRepository(Friend)
     private friendRepository: Repository<Friend>,
+    private notificationService: NotificationService,
   ) {}
 
   async sendRequest(requesterId: ID, receiverId: ID) {
@@ -44,13 +46,17 @@ export class FriendService {
       receiver: { id: receiverId },
     });
 
-    return this.friendRepository.save(friend);
+    const savedFriend = await this.friendRepository.save(friend);
+
+    this.notificationService.notifyFriendRequest(receiverId, requesterId, savedFriend.id);
+
+    return savedFriend;
   }
 
   async acceptRequest(requesterId: ID, requestId: ID) {
     const request = await this.friendRepository.findOne({
       where: { id: requestId },
-      relations: ['receiver'],
+      relations: ['requester', 'receiver'],
     });
 
     if (!request) throw new NotFoundException();
@@ -61,13 +67,21 @@ export class FriendService {
 
     request.status = FriendStatus.ACCEPTED;
 
-    return this.friendRepository.save(request);
+    const savedRequest = await this.friendRepository.save(request);
+
+    this.notificationService.notifyFriendAccepted(
+      savedRequest.requester.id,
+      savedRequest.receiver.id,
+      savedRequest.id,
+    );
+
+    return savedRequest;
   }
 
   async rejectRequest(requesterId: ID, requestId: ID) {
     const request = await this.friendRepository.findOne({
       where: { id: requestId },
-      relations: ['receiver'],
+      relations: ['requester', 'receiver'],
     });
 
     if (!request) throw new NotFoundException();
@@ -78,7 +92,15 @@ export class FriendService {
 
     request.status = FriendStatus.REJECTED;
 
-    return this.friendRepository.save(request);
+    const savedRequest = await this.friendRepository.save(request);
+
+    this.notificationService.notifyFriendRejected(
+      savedRequest.requester.id,
+      savedRequest.receiver.id,
+      savedRequest.id,
+    );
+
+    return savedRequest;
   }
 
   async getFriends(userId: ID, paginationDto: PaginationDto) {
@@ -128,12 +150,19 @@ export class FriendService {
           receiver: { id: userId },
         },
       ],
+      relations: ['requester', 'receiver'],
     });
 
     if (!relation) {
       throw new NotFoundException();
     }
 
-    return this.friendRepository.remove(relation);
+    const notifyUserId = relation.requester.id === userId ? relation.receiver.id : relation.requester.id;
+    const relationId = relation.id;
+    const removedRelation = await this.friendRepository.remove(relation);
+
+    this.notificationService.notifyFriendRemoved(notifyUserId, userId, relationId);
+
+    return removedRelation;
   }
 }

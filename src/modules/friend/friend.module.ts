@@ -4,9 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FriendController } from './friend.controller';
 import { Friend } from '@modules/friend/friend.entity';
 import { AuthModule } from '@modules/auth/auth.module';
+import { NotificationModule } from '@modules/notification/notification.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Friend]), AuthModule],
+  imports: [TypeOrmModule.forFeature([Friend]), AuthModule, NotificationModule],
   providers: [FriendService],
   controllers: [FriendController],
   exports: [FriendService],
