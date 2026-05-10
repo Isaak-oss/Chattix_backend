@@ -9,3 +9,27 @@ export class ChangeUserDto {
   @IsOptional()
   bio?: string;
 }
+
+export class UserResponseDto {
+  @IsString()
+  id: ID;
+
+  @IsString()
+  email: Email;
+
+  @IsString()
+  name: string;
+
+  @IsString()
+  @IsOptional()
+  bio?: string;
+
+  @IsString()
+  lastSeen: Date;
+
+  @IsString()
+  createdAt: Date;
+
+  @IsString()
+  updatedAt: Date;
+}

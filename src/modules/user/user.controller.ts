@@ -1,7 +1,7 @@
 import {
   Body,
   Controller,
-  Get,
+  Get, Param,
   Patch,
   Req,
   UseGuards,
@@ -28,5 +28,11 @@ export class UserController {
       ...dto,
       ...request['user'],
     });
+  }
+
+  @UseGuards(AuthGuard)
+  @Get(':id')
+  getUser(@Param('id') id: string) {
+    return this.usersService.findOneById(id);
   }
 }

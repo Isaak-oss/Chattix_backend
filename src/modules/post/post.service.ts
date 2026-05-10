@@ -16,20 +16,24 @@ export class PostService {
   getAllFeed(paginationDto: PaginationDto) {
     const qb = this.postRepository
       .createQueryBuilder('post')
-      .leftJoinAndSelect('post.author', 'author');
+      .leftJoinAndSelect('post.author', 'author')
+      .orderBy('post.createdAt', 'DESC');
     return paginate(qb, paginationDto);
   }
 
   getMyPosts(userId: ID, paginationDto: PaginationDto) {
     const qb = this.postRepository
       .createQueryBuilder('post')
-      .where('post.authorId = :userId', { userId });
+      .leftJoinAndSelect('post.author', 'author')
+      .where('post.authorId = :userId', { userId })
+      .orderBy('post.createdAt', 'DESC');
     return paginate(qb, paginationDto);
   }
 
   async create(createPostDto: CreatePostDto, userId: ID) {
     const post = this.postRepository.create({ ...createPostDto, authorId: userId });
-    return this.postRepository.save(post);
+    const newPost = await this.postRepository.save(post);
+    return this.findOne(newPost.id);
   }
 
   async update(id: ID, createPostDto: CreatePostDto) {
@@ -44,7 +48,10 @@ export class PostService {
   }
 
   async findOne(postId: ID) {
-    const post = await this.postRepository.findOne({ where: { id: postId } });
+    const post = await this.postRepository.findOne({
+      where: { id: postId },
+      relations: ['author'],
+    });
 
     if (!post) {
       throw new NotFoundException('Post not found');

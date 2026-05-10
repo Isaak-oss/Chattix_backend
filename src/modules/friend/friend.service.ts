@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Friend } from '@modules/friend/friend.entity';
+import { Friend, FriendStatus } from '@modules/friend/friend.entity';
 import { paginate } from '@common/lib/paginate/paginate';
 import { PaginationDto } from '@common/lib/paginate/paginate.dto';
 
@@ -59,7 +59,7 @@ export class FriendService {
       throw new ForbiddenException();
     }
 
-    request.status = 'accepted';
+    request.status = FriendStatus.ACCEPTED;
 
     return this.friendRepository.save(request);
   }
@@ -76,7 +76,7 @@ export class FriendService {
       throw new ForbiddenException();
     }
 
-    request.status = 'rejected';
+    request.status = FriendStatus.REJECTED;
 
     return this.friendRepository.save(request);
   }

@@ -122,7 +122,7 @@ export class AuthService {
   async resetPassword(dto: ForgotPasswordDto) {
     const { email, newPassword, oldPassword } = dto;
 
-    const user = await this.userService.findOne(email);
+    const user = await this.userService.getOneWithPassword(email);
 
     if (user.password) {
       const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
