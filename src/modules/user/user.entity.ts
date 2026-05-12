@@ -2,6 +2,7 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
+  ManyToMany,
   OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
@@ -9,6 +10,7 @@ import {
 import { Post } from '../post/post.entity';
 import { Exclude } from 'class-transformer';
 import { Friend } from '@modules/friend/friend.entity';
+import { ChatRoom } from '@modules/chat/chat-room.entity';
 
 @Entity()
 export class User {
@@ -39,6 +41,9 @@ export class User {
 
   @OneToMany(() => Friend, (friend) => friend.receiver)
   receivedRequests: Friend[];
+
+  @ManyToMany(() => ChatRoom, (chatRoom) => chatRoom.participants)
+  chatRooms: ChatRoom[];
 
   @CreateDateColumn()
   createdAt: Date;
