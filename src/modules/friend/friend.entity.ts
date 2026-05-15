@@ -18,7 +18,7 @@ export class Friend {
   @ManyToOne(() => User, (user) => user, { onDelete: 'CASCADE' })
   receiver: User;
 
-  @Column({ default: 'pending' })
+  @Column()
   status: FriendStatus;
 
   @CreateDateColumn()

@@ -32,7 +32,7 @@ export class UserController {
 
   @UseGuards(AuthGuard)
   @Get(':id')
-  getUser(@Param('id') id: string) {
-    return this.usersService.findOneById(id);
+  getProfile(@Req() request: Request, @Param('id') id: string) {
+    return this.usersService.getProfile(request['user']?.id, id);
   }
 }

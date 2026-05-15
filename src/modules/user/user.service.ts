@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
-import { FriendStatus } from '@modules/friend/friend.entity';
+import { Friend, FriendStatus } from '@modules/friend/friend.entity';
 import { UserResponseDto } from '@modules/user/user.dto';
 
 @Injectable()
@@ -10,9 +10,11 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Friend)
+    private friendRepository: Repository<Friend>,
   ) {}
 
-  async findOneById(id: string): Promise<User | null> {
+  async findOneById(id: ID): Promise<User | null> {
     const user = await this.userRepository
       .createQueryBuilder('user')
       .loadRelationCountAndMap('user.postsCount', 'user.posts')
@@ -29,6 +31,43 @@ export class UserService {
     }
 
     return user;
+  }
+
+  async getProfile(userId: ID, profileId: ID): Promise<User & { isFriend: boolean }> {
+    const [user, isFriend] = await Promise.all([
+      this.userRepository
+        .createQueryBuilder('user')
+        .loadRelationCountAndMap('user.postsCount', 'user.posts')
+        .loadRelationCountAndMap('user.friendsCount', 'user.sentRequests', 'friends', (qb) =>
+          qb.where('friends.status = :status', {
+            status: FriendStatus.ACCEPTED,
+          }),
+        )
+        .where('user.id = :profileId', { profileId })
+        .getOne(),
+
+      this.friendRepository.exist({
+        where: [
+          {
+            requester: { id: userId },
+            receiver: { id: profileId },
+            status: FriendStatus.ACCEPTED,
+          },
+          {
+            requester: { id: profileId },
+            receiver: { id: userId },
+            status: FriendStatus.ACCEPTED,
+          },
+        ],
+      }),
+    ]);
+
+    if (!user) throw new NotFoundException();
+
+    return {
+      ...user,
+      isFriend,
+    };
   }
 
   async create(user: Partial<User>): Promise<User> {
