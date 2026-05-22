@@ -11,6 +11,7 @@ import { Post } from '../post/post.entity';
 import { Exclude } from 'class-transformer';
 import { Friend } from '@modules/friend/friend.entity';
 import { ChatRoom } from '@modules/chat/chat-room.entity';
+import { Notification } from '@modules/notification/notification.entity';
 
 @Entity()
 export class User {
@@ -41,6 +42,9 @@ export class User {
 
   @OneToMany(() => Friend, (friend) => friend.receiver)
   receivedRequests: Friend[];
+
+  @OneToMany(() => Notification, (notification) => notification.user)
+  notifications: Notification[];
 
   @ManyToMany(() => ChatRoom, (chatRoom) => chatRoom.participants)
   chatRooms: ChatRoom[];

@@ -1,5 +1,9 @@
-import { Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { paginate } from '@common/lib/paginate/paginate';
+import { PaginationDto } from '@common/lib/paginate/paginate.dto';
+import { Notification } from './notification.entity';
 import { NotificationGateway } from './notification.gateway';
 import { NotificationPayload, NotificationType } from './notification.types';
 
@@ -12,21 +16,75 @@ interface CreateNotificationParams<TData = Record<string, unknown>> {
 
 @Injectable()
 export class NotificationService {
-  constructor(private readonly notificationGateway: NotificationGateway) {}
+  constructor(
+    @InjectRepository(Notification)
+    private readonly notificationRepository: Repository<Notification>,
+    private readonly notificationGateway: NotificationGateway,
+  ) {}
 
-  notifyUser<TData = Record<string, unknown>>(userId: ID, params: CreateNotificationParams<TData>) {
-    const notification = this.createNotification(params);
-    this.notificationGateway.emitToUser(userId, notification);
+  getMyNotifications(userId: ID, paginationDto: PaginationDto) {
+    const qb = this.notificationRepository
+      .createQueryBuilder('notification')
+      .where('notification.userId = :userId', { userId })
+      .orderBy('notification.createdAt', 'DESC');
+
+    return paginate(qb, paginationDto);
+  }
+
+  async getNotificationsCount(userId: ID) {
+    const result = await this.notificationRepository
+      .createQueryBuilder('notification')
+      .select('COUNT(*)', 'all')
+      .addSelect('COUNT(CASE WHEN notification.readAt IS NOT NULL THEN 1 END)', 'read')
+      .addSelect('COUNT(CASE WHEN notification.readAt IS NULL THEN 1 END)', 'unread')
+      .where('notification.userId = :userId', { userId })
+      .getRawOne();
+
+    return {
+      all: Number(result.all),
+      read: Number(result.read),
+      unread: Number(result.unread),
+    };
+  }
+
+  deleteMyNotification(notificationId: ID) {
+    return this.notificationRepository.delete(notificationId);
+  }
+
+  async markAsRead(userId: ID, notificationId: ID) {
+    const notification = await this.notificationRepository.findOne({
+      where: { id: notificationId, userId },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    notification.readAt ??= new Date();
+
+    return this.notificationRepository.save(notification);
+  }
+
+  async notifyUser<TData = Record<string, unknown>>(
+    userId: ID,
+    params: CreateNotificationParams<TData>,
+  ) {
+    const notification = await this.createNotification(userId, params);
+    await this.emitNotification(notification);
     return notification;
   }
 
-  notifyUsers<TData = Record<string, unknown>>(
+  async notifyUsers<TData = Record<string, unknown>>(
     userIds: ID[],
     params: CreateNotificationParams<TData>,
   ) {
-    const notification = this.createNotification(params);
-    this.notificationGateway.emitToUsers(userIds, notification);
-    return notification;
+    const notifications = await Promise.all(
+      userIds.map((userId) => this.createNotification(userId, params)),
+    );
+
+    await Promise.all(notifications.map((notification) => this.emitNotification(notification)));
+
+    return notifications;
   }
 
   notifyFriendRequest(receiverId: ID, requesterId: ID, requestId: ID) {
@@ -65,47 +123,58 @@ export class NotificationService {
     });
   }
 
-  notifyNewMessage(receiverId: ID, senderId: ID, messageId: ID, preview?: string) {
-    return this.notifyUser(receiverId, {
-      type: NotificationType.MESSAGE,
-      title: 'New message',
-      message: preview || 'You have a new message',
-      data: { senderId, messageId },
-    });
-  }
-
-  notifySystem<TData = Record<string, unknown>>(
+  async notifySystem<TData = Record<string, unknown>>(
     params: Omit<CreateNotificationParams<TData>, 'type'>,
     userIds?: ID[],
   ) {
-    const notification = this.createNotification({
+    const notification = {
       ...params,
       type: NotificationType.SYSTEM,
-    });
+    };
 
     if (userIds?.length) {
-      this.notificationGateway.emitToUsers(userIds, notification);
-    } else {
-      this.notificationGateway.emitSystem(notification);
+      return this.notifyUsers(userIds, notification);
     }
 
-    return notification;
+    this.notificationGateway.emitSystem({
+      id: 'system',
+      ...notification,
+      createdAt: new Date(),
+    });
   }
 
   isUserOnline(userId: ID) {
     return this.notificationGateway.isOnline(userId);
   }
 
-  private createNotification<TData = Record<string, unknown>>(
+  private async createNotification<TData = Record<string, unknown>>(
+    userId: ID,
     params: CreateNotificationParams<TData>,
-  ): NotificationPayload<TData> {
+  ): Promise<NotificationPayload<TData> & { userId: ID }> {
+    const notification = await this.notificationRepository.save(
+      this.notificationRepository.create({
+        userId,
+        type: params.type,
+        title: params.title,
+        message: params.message,
+        data: params.data as Record<string, unknown> | undefined,
+      }),
+    );
+
     return {
-      id: randomUUID(),
-      type: params.type,
-      title: params.title,
-      message: params.message,
-      data: params.data,
-      createdAt: new Date().toISOString(),
+      ...notification,
+      data: notification.data as TData | undefined,
     };
+  }
+
+  private async emitNotification<TData = Record<string, unknown>>(
+    notification: NotificationPayload<TData> & { userId: ID },
+  ) {
+    const count = await this.getNotificationsCount(notification.userId);
+
+    this.notificationGateway.emitToUser(notification.userId, {
+      data: notification,
+      count,
+    });
   }
 }

@@ -6,7 +6,11 @@ import {
 } from '@nestjs/websockets';
 import { AuthTokenService } from '@modules/auth/auth-token.service';
 import { AuthenticatedGateway, AuthenticatedSocket } from '@common/gateways/authenticated.gateway';
-import { NotificationPayload, NotificationUser } from './notification.types';
+import {
+  NotificationPayload,
+  NotificationSocketPayload,
+  NotificationUser,
+} from './notification.types';
 
 type NotificationSocket = AuthenticatedSocket<NotificationUser>;
 
@@ -31,16 +35,21 @@ export class NotificationGateway extends AuthenticatedGateway<NotificationUser> 
     });
   }
 
-  emitToUser(userId: ID, notification: NotificationPayload<unknown>) {
-    this.emitGatewayEventToUser(userId, 'notifications:new', notification);
+  emitToUser(userId: ID, payload: NotificationSocketPayload<unknown>) {
+    this.emitGatewayEventToUser(userId, 'notifications:new', payload);
   }
 
-  emitToUsers(userIds: ID[], notification: NotificationPayload<unknown>) {
-    this.emitGatewayEventToUsers(userIds, 'notifications:new', notification);
+  emitToUsers(userIds: ID[], payload: NotificationSocketPayload<unknown>) {
+    this.emitGatewayEventToUsers(userIds, 'notifications:new', payload);
   }
 
   emitSystem(notification: NotificationPayload<unknown>) {
-    this.emitGatewayEventSystem('notifications:new', notification);
+    this.emitGatewayEventSystem('notifications:new', {
+      data: notification,
+      meta: {
+        notificationsCount: 0,
+      },
+    });
   }
 
   isOnline(userId: ID) {

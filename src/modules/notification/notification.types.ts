@@ -9,11 +9,24 @@ export enum NotificationType {
 
 export interface NotificationPayload<TData = Record<string, unknown>> {
   id: string;
+  userId?: ID;
   type: NotificationType;
   title: string;
   message: string;
   data?: TData;
-  createdAt: string;
+  readAt?: Date;
+  createdAt: Date;
+}
+
+export interface NotificationsCount {
+  all: number
+  read: number
+  unread: number
+}
+
+export interface NotificationSocketPayload<TData = Record<string, unknown>> {
+  data: NotificationPayload<TData>;
+  count: NotificationsCount;
 }
 
 export interface NotificationUser {

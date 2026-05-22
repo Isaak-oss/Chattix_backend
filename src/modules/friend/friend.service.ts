@@ -53,7 +53,7 @@ export class FriendService {
 
     const savedFriend = await this.friendRepository.save(friend);
 
-    this.notificationService.notifyFriendRequest(receiverId, requesterId, savedFriend.id);
+    await this.notificationService.notifyFriendRequest(receiverId, requesterId, savedFriend.id);
 
     return savedFriend;
   }
@@ -74,7 +74,7 @@ export class FriendService {
 
     const savedRequest = await this.friendRepository.save(request);
 
-    this.notificationService.notifyFriendAccepted(
+    await this.notificationService.notifyFriendAccepted(
       savedRequest.requester.id,
       savedRequest.receiver.id,
       savedRequest.id,
@@ -99,7 +99,7 @@ export class FriendService {
 
     const savedRequest = await this.friendRepository.save(request);
 
-    this.notificationService.notifyFriendRejected(
+    await this.notificationService.notifyFriendRejected(
       savedRequest.requester.id,
       savedRequest.receiver.id,
       savedRequest.id,
@@ -235,7 +235,7 @@ export class FriendService {
     const relationId = request.id;
     const removedRelation = await this.friendRepository.remove(request);
 
-    this.notificationService.notifyFriendRemoved(notifyUserId, userId, relationId);
+    await this.notificationService.notifyFriendRemoved(notifyUserId, userId, relationId);
 
     return removedRelation;
   }
