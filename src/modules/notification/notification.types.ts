@@ -3,7 +3,6 @@ export enum NotificationType {
   FRIEND_ACCEPTED = 'friend_accepted',
   FRIEND_REJECTED = 'friend_rejected',
   FRIEND_REMOVED = 'friend_removed',
-  MESSAGE = 'message',
   SYSTEM = 'system',
 }
 
@@ -19,9 +18,9 @@ export interface NotificationPayload<TData = Record<string, unknown>> {
 }
 
 export interface NotificationsCount {
-  all: number
-  read: number
-  unread: number
+  all: number;
+  read: number;
+  unread: number;
 }
 
 export interface NotificationSocketPayload<TData = Record<string, unknown>> {

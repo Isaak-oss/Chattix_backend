@@ -40,6 +40,12 @@ export class ChatController {
   }
 
   @UseGuards(AuthGuard)
+  @Get('unreadMessages')
+  getUnreadMessages(@Req() request: Request) {
+    return this.chatService.getUnreadMessages(request['user']?.id);
+  }
+
+  @UseGuards(AuthGuard)
   @Get('rooms/:roomId/messages')
   getRoomMessages(
     @Req() request: Request,

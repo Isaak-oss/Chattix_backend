@@ -1,3 +1,4 @@
+import { forwardRef, Inject } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -19,6 +20,11 @@ interface MarkRoomReadPayload {
 
 type ChatSocket = AuthenticatedSocket<GatewayUser>;
 
+interface NewMessagePayload {
+  data: unknown;
+  unreadMessages: number;
+}
+
 @WebSocketGateway({
   namespace: 'chats',
   cors: {
@@ -29,6 +35,7 @@ type ChatSocket = AuthenticatedSocket<GatewayUser>;
 export class ChatGateway extends AuthenticatedGateway {
   constructor(
     authTokenService: AuthTokenService,
+    @Inject(forwardRef(() => ChatService))
     private readonly chatService: ChatService,
   ) {
     super(authTokenService, 'chats');
@@ -73,5 +80,9 @@ export class ChatGateway extends AuthenticatedGateway {
       client.emit('chats:error', payload);
       return { error: payload };
     }
+  }
+
+  emitNewMessageToUser(userId: ID, payload: NewMessagePayload) {
+    this.emitGatewayEventToUser(userId, 'message:new', payload);
   }
 }

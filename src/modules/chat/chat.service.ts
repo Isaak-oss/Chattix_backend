@@ -3,16 +3,17 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate } from '@common/lib/paginate/paginate';
 import { PaginationDto } from '@common/lib/paginate/paginate.dto';
-import { NotificationService } from '@modules/notification/notification.service';
-import { NotificationType } from '@modules/notification/notification.types';
 import { User } from '@modules/user/user.entity';
 import { UserService } from '@modules/user/user.service';
 import { CreateChatRoomDto, CreateMessageDto } from './chat.dto';
+import { ChatGateway } from './chat.gateway';
 import { ChatRoom } from './chat-room.entity';
 import { ChatRoomRead } from './chat-room-read.entity';
 import { Message } from './message.entity';
@@ -27,7 +28,8 @@ export class ChatService {
     @InjectRepository(ChatRoomRead)
     private readonly chatRoomReadRepository: Repository<ChatRoomRead>,
     private readonly userService: UserService,
-    private readonly notificationService: NotificationService,
+    @Inject(forwardRef(() => ChatGateway))
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   async createRoom(ownerId: ID, dto: CreateChatRoomDto) {
@@ -78,6 +80,12 @@ export class ChatService {
       .orderBy('message.createdAt', 'DESC');
 
     return paginate(qb, paginationDto);
+  }
+
+  async getUnreadMessages(userId: ID) {
+    const count = await this.getUnreadMessagesCount(userId);
+
+    return { unreadMessages: count };
   }
 
   async markAsRead(userId: ID, messageId: ID) {
@@ -140,14 +148,41 @@ export class ChatService {
     const fullMessage = await this.findOneForUser(savedMessage.id, senderId);
     const receiverIds = this.getMessageReceiverIds(room, senderId);
 
-    this.notificationService.notifyUsers(receiverIds, {
-      type: NotificationType.MESSAGE,
-      title: 'New message',
-      message: content.slice(0, 120) || 'You have a new message',
-      data: { senderId, messageId: savedMessage.id, chatRoomId: room.id },
-    });
+    await Promise.all(
+      receiverIds.map((receiverId) => this.emitNewMessage(receiverId, fullMessage)),
+    );
 
     return fullMessage;
+  }
+
+  private async emitNewMessage(receiverId: ID, message: Message) {
+    const unreadMessages = await this.getUnreadMessagesCount(receiverId);
+
+    this.chatGateway.emitNewMessageToUser(receiverId, {
+      data: message,
+      unreadMessages,
+    });
+  }
+
+  private async getUnreadMessagesCount(userId: ID) {
+    const count = await this.messageRepository
+      .createQueryBuilder('message')
+      .innerJoin('message.chatRoom', 'room')
+      .innerJoin('room.participants', 'participant', 'participant.id = :userId', { userId })
+      .leftJoin(
+        ChatRoomRead,
+        'readState',
+        'readState.chatRoomId = room.id AND readState.userId = :userId',
+        { userId },
+      )
+      .leftJoin(Message, 'lastReadMessage', 'lastReadMessage.id = readState.lastReadMessageId')
+      .where('message.senderId != :userId', { userId })
+      .andWhere(
+        '(readState.lastReadMessageId IS NULL OR message.createdAt > lastReadMessage.createdAt)',
+      )
+      .getCount();
+
+    return count;
   }
 
   private async upsertRoomReadState(userId: ID, roomId: ID, message?: Message) {
