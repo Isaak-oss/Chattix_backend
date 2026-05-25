@@ -1,11 +1,6 @@
-import {
-  ConnectedSocket,
-  MessageBody,
-  SubscribeMessage,
-  WebSocketGateway,
-} from '@nestjs/websockets';
-import { AuthTokenService } from '@modules/auth/auth-token.service';
-import { AuthenticatedGateway, AuthenticatedSocket } from '@common/gateways/authenticated.gateway';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { AuthenticatedSocket } from '@common/gateways/authenticated.gateway';
+import { RealtimeEventsService } from '@common/gateways/realtime-events.service';
 import {
   NotificationPayload,
   NotificationSocketPayload,
@@ -14,20 +9,17 @@ import {
 
 type NotificationSocket = AuthenticatedSocket<NotificationUser>;
 
-@WebSocketGateway({
-  namespace: 'notifications',
-  cors: {
-    origin: process.env.GATEWAY_ORIGIN?.split(','),
-    credentials: true,
-  },
-})
-export class NotificationGateway extends AuthenticatedGateway<NotificationUser> {
-  constructor(authTokenService: AuthTokenService) {
-    super(authTokenService, 'notifications');
+@Injectable()
+export class NotificationGateway implements OnModuleInit {
+  constructor(private readonly realtimeEvents: RealtimeEventsService) {}
+
+  onModuleInit() {
+    this.realtimeEvents.registerHandler('notifications:ping', (client, body) =>
+      this.handlePing(client as NotificationSocket, body),
+    );
   }
 
-  @SubscribeMessage('notifications:ping')
-  handlePing(@ConnectedSocket() client: NotificationSocket, @MessageBody() body: unknown) {
+  handlePing(client: NotificationSocket, body: unknown) {
     client.emit('notifications:pong', {
       userId: client.user?.id,
       data: body ?? null,
@@ -36,15 +28,15 @@ export class NotificationGateway extends AuthenticatedGateway<NotificationUser> 
   }
 
   emitToUser(userId: ID, payload: NotificationSocketPayload<unknown>) {
-    this.emitGatewayEventToUser(userId, 'notifications:new', payload);
+    this.realtimeEvents.emitToUser(userId, 'notifications:new', payload);
   }
 
   emitToUsers(userIds: ID[], payload: NotificationSocketPayload<unknown>) {
-    this.emitGatewayEventToUsers(userIds, 'notifications:new', payload);
+    this.realtimeEvents.emitToUsers(userIds, 'notifications:new', payload);
   }
 
   emitSystem(notification: NotificationPayload<unknown>) {
-    this.emitGatewayEventSystem('notifications:new', {
+    this.realtimeEvents.emitSystem('notifications:new', {
       data: notification,
       meta: {
         notificationsCount: 0,
@@ -53,6 +45,6 @@ export class NotificationGateway extends AuthenticatedGateway<NotificationUser> 
   }
 
   isOnline(userId: ID) {
-    return this.isUserOnline(userId);
+    return this.realtimeEvents.isOnline(userId);
   }
 }

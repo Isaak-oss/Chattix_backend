@@ -10,6 +10,7 @@ import { UserModule } from '@modules/user/user.module';
 import { FriendModule } from '@modules/friend/friend.module';
 import { NotificationModule } from '@modules/notification/notification.module';
 import { ChatModule } from '@modules/chat/chat.module';
+import { RealtimeModule } from '@common/gateways/realtime.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ChatModule } from '@modules/chat/chat.module';
     PostModule,
     UserModule,
     FriendModule,
+    RealtimeModule,
     NotificationModule,
     ChatModule,
   ],

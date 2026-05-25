@@ -1,16 +1,6 @@
-import { forwardRef, Inject } from '@nestjs/common';
-import {
-  ConnectedSocket,
-  MessageBody,
-  SubscribeMessage,
-  WebSocketGateway,
-} from '@nestjs/websockets';
-import { AuthTokenService } from '@modules/auth/auth-token.service';
-import {
-  AuthenticatedGateway,
-  AuthenticatedSocket,
-  GatewayUser,
-} from '@common/gateways/authenticated.gateway';
+import { forwardRef, Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { AuthenticatedSocket, GatewayUser } from '@common/gateways/authenticated.gateway';
+import { RealtimeEventsService } from '@common/gateways/realtime-events.service';
 import { ChatService } from './chat.service';
 
 interface MarkRoomReadPayload {
@@ -25,27 +15,21 @@ interface NewMessagePayload {
   unreadMessages: number;
 }
 
-@WebSocketGateway({
-  namespace: 'chats',
-  cors: {
-    origin: process.env.GATEWAY_ORIGIN?.split(','),
-    credentials: true,
-  },
-})
-export class ChatGateway extends AuthenticatedGateway {
+@Injectable()
+export class ChatGateway implements OnModuleInit {
   constructor(
-    authTokenService: AuthTokenService,
     @Inject(forwardRef(() => ChatService))
     private readonly chatService: ChatService,
-  ) {
-    super(authTokenService, 'chats');
+    private readonly realtimeEvents: RealtimeEventsService,
+  ) {}
+
+  onModuleInit() {
+    this.realtimeEvents.registerHandler('chats:read', (client, body) =>
+      this.handleRoomRead(client, body as MarkRoomReadPayload),
+    );
   }
 
-  @SubscribeMessage('chats:read')
-  async handleRoomRead(
-    @ConnectedSocket() client: ChatSocket,
-    @MessageBody() body: MarkRoomReadPayload,
-  ) {
+  async handleRoomRead(client: ChatSocket, body: MarkRoomReadPayload) {
     try {
       const userId = client.user?.id;
       if (!userId) {
@@ -70,7 +54,7 @@ export class ChatGateway extends AuthenticatedGateway {
         lastReadAt: readState.lastReadAt,
       };
 
-      this.emitGatewayEventToUsers(participantIds, 'chats:read', payload);
+      this.realtimeEvents.emitToUsers(participantIds, 'chats:read', payload);
 
       return { data: payload };
     } catch (error) {
@@ -83,6 +67,6 @@ export class ChatGateway extends AuthenticatedGateway {
   }
 
   emitNewMessageToUser(userId: ID, payload: NewMessagePayload) {
-    this.emitGatewayEventToUser(userId, 'message:new', payload);
+    this.realtimeEvents.emitToUser(userId, 'message:new', payload);
   }
 }
