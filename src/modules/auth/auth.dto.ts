@@ -1,4 +1,5 @@
 import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class SignInDto {
   @IsEmail({}, { message: 'Invalid email address' })
@@ -36,9 +37,18 @@ export class ForgotPasswordDto {
 }
 
 export class SignInResponseDto {
+  @ApiProperty()
   access_token: string;
 }
 
 export class SignInWithGoogleDto {
   googleToken: string;
+}
+
+export class LogoutResponseDto {
+  @ApiProperty()
+  success: boolean;
+
+  @ApiProperty()
+  logout: boolean;
 }

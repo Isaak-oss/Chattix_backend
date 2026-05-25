@@ -1,25 +1,23 @@
-import {
-  Body,
-  Controller,
-  Get, Param,
-  Patch,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
-import { ChangeUserDto } from '@modules/user/user.dto';
+import { ChangeUserDto, UserProfileResponseDto, UserResponseDto } from '@modules/user/user.dto';
 import { AuthGuard } from '@modules/auth/auth.guard';
+import { ApiWrappedOkResponse } from '@common/swagger/api-response.decorator';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('user')
 @Controller('user')
 export class UserController {
   constructor(private usersService: UserService) {}
 
+  @ApiWrappedOkResponse({ type: UserResponseDto })
   @UseGuards(AuthGuard)
   @Get('me')
   getMe(@Req() request: Request) {
     return this.usersService.findOne(request['user']?.email);
   }
 
+  @ApiWrappedOkResponse({ type: UserResponseDto })
   @UseGuards(AuthGuard)
   @Patch('me')
   update(@Req() request: Request, @Body() dto: ChangeUserDto) {
@@ -30,6 +28,7 @@ export class UserController {
     });
   }
 
+  @ApiWrappedOkResponse({ type: UserProfileResponseDto })
   @UseGuards(AuthGuard)
   @Get(':id')
   getProfile(@Req() request: Request, @Param('id') id: string) {

@@ -1,4 +1,5 @@
 import { IsOptional, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class ChangeUserDto {
   @IsString()
@@ -11,25 +12,43 @@ export class ChangeUserDto {
 }
 
 export class UserResponseDto {
+  @ApiProperty()
   @IsString()
   id: ID;
 
+  @ApiProperty()
   @IsString()
   email: Email;
 
+  @ApiProperty()
   @IsString()
   name: string;
 
+  @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
   bio?: string;
 
+  @ApiProperty()
   @IsString()
   lastSeen: Date;
 
+  @ApiProperty()
   @IsString()
   createdAt: Date;
 
+  @ApiProperty()
   @IsString()
   updatedAt: Date;
+}
+
+export class UserProfileResponseDto extends UserResponseDto {
+  @ApiProperty()
+  postsCount: number;
+
+  @ApiProperty()
+  friendsCount: number;
+
+  @ApiProperty()
+  isFriend: boolean;
 }

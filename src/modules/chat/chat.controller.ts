@@ -15,17 +15,30 @@ import {
 import { PaginationDto } from '@common/lib/paginate/paginate.dto';
 import { AuthGuard } from '@modules/auth/auth.guard';
 import {
+  ChatRoomReadResponseDto,
   ChatRoomParamsDto,
+  ChatRoomResponseDto,
   CreateChatRoomDto,
   CreateMessageDto,
+  ChatRoomWithFirstMessageResponseDto,
   MarkChatRoomReadDto,
+  MessageResponseDto,
+  UnreadMessagesResponseDto,
 } from './chat.dto';
 import { ChatService } from './chat.service';
+import {
+  ApiEmptyResponse,
+  ApiWrappedCreatedResponse,
+  ApiWrappedOkResponse,
+} from '@common/swagger/api-response.decorator';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('chats')
 @Controller('chats')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
+  @ApiWrappedCreatedResponse({ type: ChatRoomWithFirstMessageResponseDto })
   @UseGuards(AuthGuard)
   @Post('rooms')
   async createRoom(@Req() request: Request, @Body() dto: CreateChatRoomDto) {
@@ -33,18 +46,21 @@ export class ChatController {
     return { data: room };
   }
 
+  @ApiWrappedOkResponse({ type: ChatRoomResponseDto, isArray: true })
   @UseGuards(AuthGuard)
   @Get('rooms')
   getMyRooms(@Req() request: Request, @Query() dto: PaginationDto) {
     return this.chatService.getMyRooms(request['user']?.id, dto);
   }
 
+  @ApiWrappedOkResponse({ type: UnreadMessagesResponseDto })
   @UseGuards(AuthGuard)
   @Get('unreadMessages')
   getUnreadMessages(@Req() request: Request) {
     return this.chatService.getUnreadMessages(request['user']?.id);
   }
 
+  @ApiWrappedOkResponse({ type: MessageResponseDto, isArray: true })
   @UseGuards(AuthGuard)
   @Get('rooms/:roomId/messages')
   getRoomMessages(
@@ -55,6 +71,7 @@ export class ChatController {
     return this.chatService.getRoomMessages(request['user']?.id, params.roomId, dto);
   }
 
+  @ApiWrappedOkResponse({ type: ChatRoomReadResponseDto })
   @UseGuards(AuthGuard)
   @Patch('rooms/:roomId/read')
   async markRoomAsRead(
@@ -70,6 +87,7 @@ export class ChatController {
     return { data: readState };
   }
 
+  @ApiWrappedCreatedResponse({ type: MessageResponseDto })
   @UseGuards(AuthGuard)
   @Post('rooms/:roomId/messages')
   async sendMessage(
@@ -81,6 +99,7 @@ export class ChatController {
     return { data: message };
   }
 
+  @ApiWrappedOkResponse({ type: ChatRoomReadResponseDto })
   @UseGuards(AuthGuard)
   @Patch(':id/read')
   async markAsRead(@Req() request: Request, @Param('id') id: string) {
@@ -88,6 +107,7 @@ export class ChatController {
     return { data: message };
   }
 
+  @ApiEmptyResponse()
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(AuthGuard)
   @Delete(':id')
