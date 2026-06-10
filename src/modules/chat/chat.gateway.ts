@@ -47,12 +47,7 @@ export class ChatGateway implements OnModuleInit {
         body.lastReadMessageId,
       );
       const participantIds = await this.chatService.getRoomParticipantIds(roomId);
-      const payload = {
-        chatRoomId: roomId,
-        userId,
-        lastReadMessageId: readState.lastReadMessageId,
-        lastReadAt: readState.lastReadAt,
-      };
+      const payload = readState;
 
       this.realtimeEvents.emitToUsers(participantIds, 'chats:read', payload);
 

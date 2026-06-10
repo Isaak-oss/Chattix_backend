@@ -152,9 +152,6 @@ export class MessageResponseDto {
   @ApiProperty()
   chatRoomId: ID;
 
-  @ApiProperty({ type: () => ChatRoomResponseDto, required: false })
-  chatRoom?: ChatRoomResponseDto;
-
   @ApiProperty()
   senderId: ID;
 

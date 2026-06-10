@@ -89,6 +89,29 @@ export class ChatService {
     }));
   }
 
+  async getRoom(userId: ID, roomId: ID) {
+    const room = await this.chatRoomRepository
+      .createQueryBuilder('room')
+      .addSelect('room.directKey')
+      .leftJoinAndSelect('room.participants', 'participants')
+      .leftJoinAndSelect('room.readStates', 'readStates', 'readStates.userId = :userId', {
+        userId,
+      })
+      .where('room.id = :roomId', { roomId })
+      .getOne();
+
+    if (!room) {
+      throw new NotFoundException('Chat room not found');
+    }
+
+    const hasAccess = room.participants.some((participant) => participant.id === userId);
+    if (!hasAccess) {
+      throw new ForbiddenException();
+    }
+
+    return this.withoutDirectKey(room);
+  }
+
   async sendMessage(senderId: ID, chatRoomId: ID, dto: CreateMessageDto) {
     const room = await this.findRoomForUser(chatRoomId, senderId);
     return this.createMessageInRoom(senderId, room, dto.content);
@@ -240,7 +263,6 @@ export class ChatService {
     return this.messageRepository
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.sender', 'sender')
-      .leftJoinAndSelect('message.chatRoom', 'chatRoom');
   }
 
   private assertCanAccessMessage(message: Message, userId: ID) {
@@ -254,10 +276,16 @@ export class ChatService {
   }
 
   private async findOneForUser(messageId: ID, userId: ID) {
-    const message = await this.messageRepository.findOne({
-      where: { id: messageId },
-      relations: ['sender', 'chatRoom', 'chatRoom.participants'],
-    });
+    const message = await this.messageRepository
+      .createQueryBuilder('message')
+      .leftJoinAndSelect('message.sender', 'sender')
+      .leftJoinAndSelect('message.chatRoom', 'chatRoom')
+      .leftJoinAndSelect('chatRoom.participants', 'participants')
+      .leftJoinAndSelect('chatRoom.readStates', 'readStates', 'readStates.userId = :userId', {
+        userId,
+      })
+      .where('message.id = :messageId', { messageId })
+      .getOne();
 
     if (!message) {
       throw new NotFoundException('Message not found');

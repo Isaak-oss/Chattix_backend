@@ -77,6 +77,20 @@ export class ChatController {
     return this.chatService.getMyRooms(request['user']?.id, dto);
   }
 
+  @ApiOperation({ summary: 'Get chat room by id' })
+  @ApiParam({
+    name: 'roomId',
+    description: 'Chat room id.',
+    example: '6d0d13e3-b31f-44d9-91c6-8d937ff3d9a5',
+  })
+  @ApiWrappedOkResponse({ type: ChatRoomResponseDto })
+  @UseGuards(AuthGuard)
+  @Get('rooms/:roomId')
+  async getRoom(@Req() request: Request, @Param() params: ChatRoomParamsDto) {
+    const room = await this.chatService.getRoom(request['user']?.id, params.roomId);
+    return { data: room };
+  }
+
   @ApiOperation({ summary: 'Get unread messages count' })
   @ApiWrappedOkResponse({ type: UnreadMessagesResponseDto })
   @UseGuards(AuthGuard)
