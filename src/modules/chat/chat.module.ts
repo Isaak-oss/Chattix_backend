@@ -8,10 +8,11 @@ import { ChatRoom } from './chat-room.entity';
 import { ChatRoomRead } from './chat-room-read.entity';
 import { Message } from './message.entity';
 import { ChatService } from './chat.service';
+import { User } from '@modules/user/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Message, ChatRoom, ChatRoomRead]),
+    TypeOrmModule.forFeature([Message, ChatRoom, ChatRoomRead, User]),
     AuthModule,
     RealtimeModule,
   ],

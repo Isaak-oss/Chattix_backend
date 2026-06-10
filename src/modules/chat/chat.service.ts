@@ -7,14 +7,13 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { paginate } from '@common/lib/paginate/paginate';
 import { PaginationDto } from '@common/lib/paginate/paginate.dto';
 import { User } from '@modules/user/user.entity';
-import { UserService } from '@modules/user/user.service';
-import { CreateChatRoomDto, CreateMessageDto } from './chat.dto';
+import { CreateChatRoomDto, CreateGroupChatRoomDto, CreateMessageDto } from './chat.dto';
 import { ChatGateway } from './chat.gateway';
-import { ChatRoom } from './chat-room.entity';
+import { ChatRoom, ChatRoomType } from './chat-room.entity';
 import { ChatRoomRead } from './chat-room-read.entity';
 import { Message } from './message.entity';
 
@@ -27,36 +26,56 @@ export class ChatService {
     private readonly chatRoomRepository: Repository<ChatRoom>,
     @InjectRepository(ChatRoomRead)
     private readonly chatRoomReadRepository: Repository<ChatRoomRead>,
-    private readonly userService: UserService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
   ) {}
 
   async createRoom(ownerId: ID, dto: CreateChatRoomDto) {
+    if (ownerId === dto.to) {
+      throw new BadRequestException('Cannot create a direct chat with yourself');
+    }
+
+    const participants = await this.findUsersByIdsOrFail([ownerId, dto.to]);
+    const participant = participants.find((user) => user.id === dto.to);
+    const directKey = this.createDirectKey(ownerId, dto.to);
+    const room =
+      (await this.findDirectRoomByKey(directKey)) ??
+      (await this.findAndClaimLegacyDirectRoom(ownerId, dto.to, directKey)) ??
+      (await this.createDirectRoom(directKey, participant?.name, participants));
+    await this.ensureDirectRoomType(room);
+
+    const firstMessage = await this.createMessageInRoom(ownerId, room, dto.firstMessage);
+
+    return { ...this.withoutDirectKey(room), firstMessage };
+  }
+
+  async createGroupRoom(ownerId: ID, dto: CreateGroupChatRoomDto) {
     const participantIds = Array.from(new Set([ownerId, ...dto.participantIds]));
 
     if (participantIds.length < 2) {
       throw new BadRequestException('Chat room must have at least two participants');
     }
 
-    const participants = (await Promise.all(
-      participantIds.map((participantId) => this.userService.findOneById(participantId)),
-    )) as User[];
+    const participants = await this.findUsersByIdsOrFail(participantIds);
 
     const room = this.chatRoomRepository.create({
-      name: dto.name,
+      name: dto.name?.trim() || undefined,
+      type: ChatRoomType.GROUP,
       participants,
     });
 
     const savedRoom = await this.chatRoomRepository.save(room);
     const firstMessage = await this.createMessageInRoom(ownerId, savedRoom, dto.firstMessage);
 
-    return { ...savedRoom, firstMessage };
+    return { ...this.withResolvedType(savedRoom), firstMessage };
   }
 
   getMyRooms(userId: ID, paginationDto: PaginationDto) {
     const qb = this.chatRoomRepository
       .createQueryBuilder('room')
+      .addSelect('room.directKey')
       .innerJoin('room.participants', 'currentUser', 'currentUser.id = :userId', { userId })
       .leftJoinAndSelect('room.participants', 'participants')
       .leftJoinAndSelect('room.readStates', 'readStates', 'readStates.userId = :userId', {
@@ -64,7 +83,10 @@ export class ChatService {
       })
       .orderBy('room.updatedAt', 'DESC');
 
-    return paginate(qb, paginationDto);
+    return paginate(qb, paginationDto).then((result) => ({
+      ...result,
+      data: result.data.map((room) => this.withoutDirectKey(room)),
+    }));
   }
 
   async sendMessage(senderId: ID, chatRoomId: ID, dto: CreateMessageDto) {
@@ -99,7 +121,7 @@ export class ChatService {
 
     const latestMessage = await this.messageRepository.findOne({
       where: { chatRoomId: roomId },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'DESC', id: 'DESC' },
     });
 
     return this.upsertRoomReadState(userId, roomId, latestMessage ?? undefined);
@@ -145,6 +167,9 @@ export class ChatService {
       senderId,
     });
     const savedMessage = await this.messageRepository.save(message);
+    await this.chatRoomRepository.update(room.id, { updatedAt: savedMessage.createdAt });
+    room.updatedAt = savedMessage.createdAt;
+
     const fullMessage = await this.findOneForUser(savedMessage.id, senderId);
     const receiverIds = this.getMessageReceiverIds(room, senderId);
 
@@ -175,40 +200,40 @@ export class ChatService {
         'readState.chatRoomId = room.id AND readState.userId = :userId',
         { userId },
       )
-      .leftJoin(Message, 'lastReadMessage', 'lastReadMessage.id = readState.lastReadMessageId')
       .where('message.senderId != :userId', { userId })
-      .andWhere(
-        '(readState.lastReadMessageId IS NULL OR message.createdAt > lastReadMessage.createdAt)',
-      )
+      .andWhere('(readState.lastReadAt IS NULL OR message.createdAt > readState.lastReadAt)')
       .getCount();
 
     return count;
   }
 
   private async upsertRoomReadState(userId: ID, roomId: ID, message?: Message) {
-    const existingReadState = await this.chatRoomReadRepository.findOne({
-      where: { chatRoomId: roomId, userId },
-      relations: ['lastReadMessage'],
+    const existingReadState = await this.chatRoomReadRepository.findOneBy({
+      chatRoomId: roomId,
+      userId,
     });
+    const nextLastReadAt = message?.createdAt ?? new Date();
 
-    if (
-      existingReadState?.lastReadMessage &&
-      message &&
-      existingReadState.lastReadMessage.createdAt > message.createdAt
-    ) {
+    if (existingReadState?.lastReadAt && existingReadState.lastReadAt >= nextLastReadAt) {
       return existingReadState;
     }
 
-    const readState =
-      existingReadState ?? this.chatRoomReadRepository.create({ chatRoomId: roomId, userId });
+    await this.chatRoomReadRepository.upsert(
+      {
+        chatRoomId: roomId,
+        userId,
+        lastReadMessageId: message?.id,
+        lastReadAt: nextLastReadAt,
+      },
+      ['chatRoomId', 'userId'],
+    );
 
-    if (message) {
-      readState.lastReadMessageId = message.id;
+    const readState = await this.chatRoomReadRepository.findOneBy({ chatRoomId: roomId, userId });
+    if (!readState) {
+      throw new NotFoundException('Read state not found');
     }
 
-    readState.lastReadAt = new Date();
-
-    return this.chatRoomReadRepository.save(readState);
+    return readState;
   }
 
   private createMessageQuery() {
@@ -261,10 +286,43 @@ export class ChatService {
     return room;
   }
 
-  private async findDirectRoomForUsers(userId: ID, participantId: ID) {
-    const directRoom = await this.chatRoomRepository
+  private findDirectRoomByKey(directKey: string) {
+    return this.chatRoomRepository
       .createQueryBuilder('room')
-      .innerJoin('room.participants', 'requestedParticipant')
+      .addSelect('room.directKey')
+      .leftJoinAndSelect('room.participants', 'participants')
+      .where('room.directKey = :directKey', { directKey })
+      .getOne();
+  }
+
+  private async findAndClaimLegacyDirectRoom(userId: ID, participantId: ID, directKey: string) {
+    const room = await this.findLegacyDirectRoomForUsers(userId, participantId);
+    if (!room) {
+      return null;
+    }
+
+    try {
+      await this.chatRoomRepository.update(room.id, {
+        directKey,
+        type: ChatRoomType.DIRECT,
+      });
+      room.directKey = directKey;
+      room.type = ChatRoomType.DIRECT;
+      return room;
+    } catch (error) {
+      const existingRoom = await this.findDirectRoomByKey(directKey);
+      if (existingRoom) {
+        return existingRoom;
+      }
+
+      throw error;
+    }
+  }
+
+  private findLegacyDirectRoomForUsers(userId: ID, participantId: ID) {
+    return this.chatRoomRepository
+      .createQueryBuilder('room')
+      .innerJoinAndSelect('room.participants', 'participants')
       .where((qb) => {
         const subQuery = qb
           .subQuery()
@@ -278,20 +336,85 @@ export class ChatService {
 
         return `room.id IN ${subQuery}`;
       })
-      .andWhere('requestedParticipant.id = :userId', { userId })
+      .andWhere('room.directKey IS NULL')
+      .andWhere('(room.type IS NULL OR room.type = :directType)', {
+        directType: ChatRoomType.DIRECT,
+      })
       .setParameter('participantIds', [userId, participantId])
+      .orderBy('room.updatedAt', 'DESC')
       .getOne();
+  }
 
-    if (!directRoom) {
-      throw new NotFoundException('Conversation not found');
+  private async createDirectRoom(
+    directKey: string,
+    name: string | undefined,
+    participants: User[],
+  ) {
+    try {
+      return await this.chatRoomRepository.save(
+        this.chatRoomRepository.create({
+          name,
+          type: ChatRoomType.DIRECT,
+          directKey,
+          participants,
+        }),
+      );
+    } catch (error) {
+      const existingRoom = await this.findDirectRoomByKey(directKey);
+      if (existingRoom) {
+        return existingRoom;
+      }
+
+      throw error;
+    }
+  }
+
+  private async ensureDirectRoomType(room: ChatRoom) {
+    if (room.type === ChatRoomType.DIRECT) {
+      return;
     }
 
-    return directRoom;
+    await this.chatRoomRepository.update(room.id, { type: ChatRoomType.DIRECT });
+    room.type = ChatRoomType.DIRECT;
   }
 
   private getMessageReceiverIds(room: ChatRoom, senderId: ID) {
     return room.participants
       .map((participant) => participant.id)
       .filter((participantId) => participantId !== senderId);
+  }
+
+  private createDirectKey(firstUserId: ID, secondUserId: ID) {
+    return [firstUserId, secondUserId].sort().join(':');
+  }
+
+  private withoutDirectKey(room: ChatRoom) {
+    const { directKey, ...publicRoom } = this.withResolvedType(room);
+    void directKey;
+    return publicRoom;
+  }
+
+  private withResolvedType(room: ChatRoom) {
+    if (room.type) {
+      return room;
+    }
+
+    return {
+      ...room,
+      type: room.directKey ? ChatRoomType.DIRECT : ChatRoomType.GROUP,
+    };
+  }
+
+  private async findUsersByIdsOrFail(userIds: ID[]) {
+    const uniqueIds = Array.from(new Set(userIds));
+    const users = await this.userRepository.find({ where: { id: In(uniqueIds) } });
+
+    if (users.length !== uniqueIds.length) {
+      const foundIds = new Set(users.map((user) => user.id));
+      const missingIds = uniqueIds.filter((userId) => !foundIds.has(userId));
+      throw new BadRequestException(`User not found: ${missingIds.join(', ')}`);
+    }
+
+    return users;
   }
 }
