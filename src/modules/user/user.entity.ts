@@ -31,7 +31,7 @@ export class User {
   @Column({ nullable: true })
   bio?: string;
 
-  @Column({ default: new Date() })
+  @Column({ type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
   lastSeen: Date;
 
   @OneToMany(() => Post, (post) => post.author)
@@ -49,9 +49,9 @@ export class User {
   @ManyToMany(() => ChatRoom, (chatRoom) => chatRoom.participants)
   chatRooms: ChatRoom[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

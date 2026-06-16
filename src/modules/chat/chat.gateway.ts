@@ -12,7 +12,7 @@ type ChatSocket = AuthenticatedSocket<GatewayUser>;
 
 interface NewMessagePayload {
   data: unknown;
-  unreadMessages: number;
+  unreadMessagesCount: number;
 }
 
 @Injectable()
@@ -47,11 +47,11 @@ export class ChatGateway implements OnModuleInit {
         body.lastReadMessageId,
       );
       const participantIds = await this.chatService.getRoomParticipantIds(roomId);
-      const payload = readState;
+      const payload = await this.createRoomReadPayload(userId, roomId, readState);
 
       this.realtimeEvents.emitToUsers(participantIds, 'chats:read', payload);
 
-      return { data: payload };
+      return payload;
     } catch (error) {
       const payload = {
         message: error instanceof Error ? error.message : 'Failed to mark chat as read',
@@ -63,5 +63,9 @@ export class ChatGateway implements OnModuleInit {
 
   emitNewMessageToUser(userId: ID, payload: NewMessagePayload) {
     this.realtimeEvents.emitToUser(userId, 'message:new', payload);
+  }
+
+  private createRoomReadPayload(userId: ID, roomId: ID, readState: unknown) {
+    return this.chatService.createRoomReadEventPayload(userId, roomId, readState);
   }
 }

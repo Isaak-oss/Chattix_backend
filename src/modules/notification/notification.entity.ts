@@ -33,9 +33,9 @@ export class Notification {
   @Column({ type: 'jsonb', nullable: true })
   data?: Record<string, unknown>;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   readAt?: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 }

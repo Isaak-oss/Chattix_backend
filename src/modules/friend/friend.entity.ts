@@ -21,6 +21,6 @@ export class Friend {
   @Column()
   status: FriendStatus;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 }

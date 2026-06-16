@@ -11,6 +11,8 @@ export const typeOrmConfig: DataSourceOptions = {
   password: process.env.PG_PASSWORD,
   database: process.env.PG_DB,
   entities: [__dirname + '/../../**/*.entity.{js,ts}'],
+  extra: {
+    options: '-c timezone=UTC',
+  },
   synchronize: true,
 };
-

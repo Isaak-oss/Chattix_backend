@@ -40,12 +40,16 @@ export class ChatRoom {
   @OneToMany(() => Message, (message) => message.chatRoom)
   messages: Message[];
 
+  lastMessage?: Message;
+
+  unreadMessagesCount?: number;
+
   @OneToMany(() => ChatRoomRead, (readState) => readState.chatRoom)
   readStates: ChatRoomRead[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

@@ -115,33 +115,6 @@ export class ChatRoomReadResponseDto {
   updatedAt: Date;
 }
 
-export class ChatRoomResponseDto {
-  @ApiProperty()
-  id: ID;
-
-  @ApiProperty({ required: false })
-  name?: string;
-
-  @ApiProperty({
-    enum: ChatRoomType,
-    example: ChatRoomType.DIRECT,
-    description: 'Chat room type: direct one-on-one chat or group chat.',
-  })
-  type: ChatRoomType;
-
-  @ApiProperty({ type: () => [UserResponseDto] })
-  participants: UserResponseDto[];
-
-  @ApiProperty({ type: () => [ChatRoomReadResponseDto], required: false })
-  readStates?: ChatRoomReadResponseDto[];
-
-  @ApiProperty()
-  createdAt: Date;
-
-  @ApiProperty()
-  updatedAt: Date;
-}
-
 export class MessageResponseDto {
   @ApiProperty()
   id: ID;
@@ -165,6 +138,39 @@ export class MessageResponseDto {
   updatedAt: Date;
 }
 
+export class ChatRoomResponseDto {
+  @ApiProperty()
+  id: ID;
+
+  @ApiProperty({ required: false })
+  name?: string;
+
+  @ApiProperty({
+    enum: ChatRoomType,
+    example: ChatRoomType.DIRECT,
+    description: 'Chat room type: direct one-on-one chat or group chat.',
+  })
+  type: ChatRoomType;
+
+  @ApiProperty({ type: () => [UserResponseDto] })
+  participants: UserResponseDto[];
+
+  @ApiProperty({ type: () => [ChatRoomReadResponseDto], required: false })
+  readStates?: ChatRoomReadResponseDto[];
+
+  @ApiProperty({ type: () => MessageResponseDto, required: false, nullable: true })
+  lastMessage?: MessageResponseDto;
+
+  @ApiProperty()
+  unreadMessagesCount: number;
+
+  @ApiProperty()
+  createdAt: Date;
+
+  @ApiProperty()
+  updatedAt: Date;
+}
+
 export class ChatRoomWithFirstMessageResponseDto extends ChatRoomResponseDto {
   @ApiProperty({ type: () => MessageResponseDto })
   firstMessage: MessageResponseDto;
@@ -172,5 +178,5 @@ export class ChatRoomWithFirstMessageResponseDto extends ChatRoomResponseDto {
 
 export class UnreadMessagesResponseDto {
   @ApiProperty()
-  unreadMessages: number;
+  unreadMessagesCount: number;
 }
