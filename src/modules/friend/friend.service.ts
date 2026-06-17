@@ -12,6 +12,7 @@ import { NotificationService } from '@modules/notification/notification.service'
 import { FriendQueryDto, FriendStatusQuery } from '@modules/friend/friend.dto';
 import { User } from '@modules/user/user.entity';
 import { PaginationDto } from '@common/lib/paginate/paginate.dto';
+import { RealtimeEventsService } from '@common/gateways/realtime-events.service';
 
 @Injectable()
 export class FriendService {
@@ -21,6 +22,7 @@ export class FriendService {
     private notificationService: NotificationService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   async sendRequest(requesterId: ID, receiverId: ID) {
@@ -138,6 +140,7 @@ export class FriendService {
 
     const friends = data.map((friend) => {
       const isRequester = friend.requester.id === userId;
+      const user = isRequester ? friend.receiver : friend.requester;
 
       const friendStatus =
         status === FriendStatusQuery.REJECTED
@@ -147,7 +150,8 @@ export class FriendService {
           : status;
 
       return {
-        ...(isRequester ? friend.receiver : friend.requester),
+        ...user,
+        isOnline: this.realtimeEvents.isOnline(user.id),
         friendStatus,
         friendRequestId: friend.id,
       };
@@ -178,7 +182,15 @@ export class FriendService {
       .orderBy('user.createdAt', 'DESC')
       .addOrderBy('user.id', 'ASC');
 
-    return paginate(qb, paginationDto);
+    const result = await paginate(qb, paginationDto);
+
+    return {
+      ...result,
+      data: result.data.map((user) => ({
+        ...user,
+        isOnline: this.realtimeEvents.isOnline(user.id),
+      })),
+    };
   }
 
   async getFriendsCount(userId: ID) {

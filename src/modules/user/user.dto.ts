@@ -31,7 +31,10 @@ export class UserResponseDto {
 
   @ApiProperty()
   @IsString()
-  lastSeen: Date;
+  lastSeenAt: Date;
+
+  @ApiProperty({ required: false })
+  isOnline?: boolean;
 
   @ApiProperty()
   @IsString()

@@ -32,7 +32,7 @@ export class User {
   bio?: string;
 
   @Column({ type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
-  lastSeen: Date;
+  lastSeenAt: Date;
 
   @OneToMany(() => Post, (post) => post.author)
   posts: Post[];

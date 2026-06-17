@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from './user.entity';
 import { Friend, FriendStatus } from '@modules/friend/friend.entity';
 import { UserResponseDto } from '@modules/user/user.dto';
+import { RealtimeEventsService } from '@common/gateways/realtime-events.service';
 
 @Injectable()
 export class UserService {
@@ -12,6 +13,7 @@ export class UserService {
     private userRepository: Repository<User>,
     @InjectRepository(Friend)
     private friendRepository: Repository<Friend>,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   async findOneById(id: ID): Promise<User | null> {
@@ -30,10 +32,13 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    return user;
+    return this.withOnlineStatus(user);
   }
 
-  async getProfile(userId: ID, profileId: ID): Promise<User & { isFriend: boolean }> {
+  async getProfile(
+    userId: ID,
+    profileId: ID,
+  ): Promise<User & { isFriend: boolean; isOnline: boolean }> {
     const [user, isFriend] = await Promise.all([
       this.userRepository
         .createQueryBuilder('user')
@@ -67,6 +72,7 @@ export class UserService {
     return {
       ...user,
       isFriend,
+      isOnline: this.realtimeEvents.isOnline(user.id),
     };
   }
 
@@ -82,7 +88,9 @@ export class UserService {
 
     if (!updatedUser) throw new NotFoundException('User not found');
 
-    return this.userRepository.save(updatedUser);
+    const savedUser = await this.userRepository.save(updatedUser);
+
+    return this.withOnlineStatus(savedUser);
   }
 
   async findOne(email: string): Promise<UserResponseDto>;
@@ -98,7 +106,7 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    return user;
+    return this.withOnlineStatus(user);
   }
 
   async getOneWithPassword(email: string) {
@@ -112,5 +120,12 @@ export class UserService {
     }
 
     return user;
+  }
+
+  private withOnlineStatus<T extends User>(user: T) {
+    return {
+      ...user,
+      isOnline: this.realtimeEvents.isOnline(user.id),
+    };
   }
 }

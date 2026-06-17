@@ -47,18 +47,24 @@ export class RealtimeEventsService {
 
   addUserSocket(userId: ID, socketId: string) {
     const userSockets = this.socketsByUser.get(userId) ?? new Set<string>();
+    const wasOffline = userSockets.size === 0;
     userSockets.add(socketId);
     this.socketsByUser.set(userId, userSockets);
+
+    return wasOffline;
   }
 
   removeUserSocket(userId: ID, socketId: string) {
     const userSockets = this.socketsByUser.get(userId);
-    if (!userSockets) return;
+    if (!userSockets) return false;
 
     userSockets.delete(socketId);
     if (userSockets.size === 0) {
       this.socketsByUser.delete(userId);
+      return true;
     }
+
+    return false;
   }
 
   isOnline(userId: ID) {
