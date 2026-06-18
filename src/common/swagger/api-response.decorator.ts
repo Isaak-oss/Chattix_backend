@@ -13,17 +13,35 @@ import {
 } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
 
 export class SwaggerMetaDto {
-  @ApiProperty({ required: false, example: 25 })
-  total?: number;
-
   @ApiProperty({ required: false, example: 20 })
   limit?: number;
 
-  @ApiProperty({ required: false, example: 0 })
-  offset?: number;
+  @ApiProperty({ required: false })
+  cursor?: string;
+
+  @ApiProperty({ required: false })
+  nextCursor?: string;
+
+  @ApiProperty({ required: false })
+  before?: string;
+
+  @ApiProperty({ required: false })
+  after?: string;
+
+  @ApiProperty({ required: false })
+  nextBefore?: string;
+
+  @ApiProperty({ required: false })
+  nextAfter?: string;
 
   @ApiProperty({ required: false, example: true })
   hasMore?: boolean;
+
+  @ApiProperty({ required: false, example: true })
+  hasMoreBefore?: boolean;
+
+  @ApiProperty({ required: false, example: false })
+  hasMoreAfter?: boolean;
 }
 
 export class SwaggerResponseDto {

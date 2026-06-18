@@ -11,12 +11,20 @@ import { In, Repository } from 'typeorm';
 import { paginate } from '@common/lib/paginate/paginate';
 import { PaginationDto } from '@common/lib/paginate/paginate.dto';
 import { User } from '@modules/user/user.entity';
-import { CreateChatRoomDto, CreateGroupChatRoomDto, CreateMessageDto } from './chat.dto';
+import {
+  CreateChatRoomDto,
+  CreateGroupChatRoomDto,
+  CreateMessageDto,
+  RoomMessagesQueryDto,
+} from './chat.dto';
 import { ChatGateway } from './chat.gateway';
 import { ChatRoom, ChatRoomType } from './chat-room.entity';
 import { ChatRoomRead } from './chat-room-read.entity';
 import { Message } from './message.entity';
 import { RealtimeEventsService } from '@common/gateways/realtime-events.service';
+
+type MessageAnchor = Pick<Message, 'id' | 'createdAt'>;
+type ReadAnchorSource = 'lastReadMessageId' | 'lastReadAt' | 'lastReadAtAfter';
 
 @Injectable()
 export class ChatService {
@@ -77,11 +85,14 @@ export class ChatService {
   }
 
   async getMyRooms(userId: ID, paginationDto: PaginationDto) {
-    const qb = this.createRoomResponseQuery(userId)
-      .innerJoin('room.participants', 'currentUser', 'currentUser.id = :userId', { userId })
-      .orderBy('room.updatedAt', 'DESC');
+    const qb = this.createRoomResponseQuery(userId).innerJoin(
+      'room.participants',
+      'currentUser',
+      'currentUser.id = :userId',
+      { userId },
+    );
 
-    const result = await paginate(qb, paginationDto);
+    const result = await paginate(qb, paginationDto, { alias: 'room', cursorColumn: 'updatedAt' });
     await this.attachUnreadMessagesCounts(userId, result.data);
 
     return {
@@ -118,14 +129,277 @@ export class ChatService {
     return this.createMessageInRoom(senderId, room, dto.content);
   }
 
-  async getRoomMessages(userId: ID, roomId: ID, paginationDto: PaginationDto) {
+  async getRoomMessages(userId: ID, roomId: ID, paginationDto: RoomMessagesQueryDto) {
     await this.findRoomForUser(roomId, userId);
 
-    const qb = this.createMessageQuery()
-      .where('message.chatRoomId = :roomId', { roomId })
-      .orderBy('message.createdAt', 'DESC');
+    if (this.usesMessageIdPagination(paginationDto)) {
+      return this.getRoomMessagesByMessageId(userId, roomId, paginationDto);
+    }
 
-    return paginate(qb, paginationDto);
+    const qb = this.createMessageQuery().where('message.chatRoomId = :roomId', { roomId });
+
+    return paginate(qb, paginationDto, { alias: 'message', cursorColumn: 'createdAt' });
+  }
+
+  private async getRoomMessagesByMessageId(
+    userId: ID,
+    roomId: ID,
+    paginationDto: RoomMessagesQueryDto,
+  ) {
+    this.assertSingleMessagePaginationMode(paginationDto);
+
+    const limit = this.getMessagePageLimit(paginationDto.limit);
+
+    if (paginationDto.aroundLastRead) {
+      return this.getRoomMessagesAroundLastRead(userId, roomId, limit);
+    }
+
+    if (paginationDto.before) {
+      const anchor = await this.findMessageAnchor(roomId, paginationDto.before);
+      const { data, hasMore } = await this.getMessagesBeforeAnchor(roomId, anchor, limit);
+
+      return {
+        data,
+        meta: {
+          limit,
+          before: paginationDto.before,
+          nextBefore: hasMore ? data[data.length - 1]?.id : undefined,
+          hasMoreBefore: hasMore,
+          hasMoreAfter: false,
+          order: 'DESC',
+        },
+      };
+    }
+
+    if (paginationDto.after) {
+      const anchor = await this.findMessageAnchor(roomId, paginationDto.after);
+      const { data, hasMore } = await this.getMessagesAfterAnchor(roomId, anchor, limit);
+
+      return {
+        data,
+        meta: {
+          limit,
+          after: paginationDto.after,
+          nextAfter: hasMore ? data[data.length - 1]?.id : undefined,
+          hasMoreBefore: false,
+          hasMoreAfter: hasMore,
+          order: 'ASC',
+        },
+      };
+    }
+
+    throw new BadRequestException('Message pagination mode is required');
+  }
+
+  private async getRoomMessagesAroundLastRead(userId: ID, roomId: ID, limit: number) {
+    const readAnchor = await this.findLastReadAnchor(userId, roomId);
+
+    if (!readAnchor) {
+      const { data, hasMore } = await this.getLatestMessages(roomId, limit);
+
+      return {
+        data,
+        meta: {
+          limit,
+          aroundLastRead: true,
+          anchorMessageId: undefined,
+          anchorSource: 'none',
+          nextBefore: hasMore ? data[data.length - 1]?.id : undefined,
+          hasMoreBefore: hasMore,
+          hasMoreAfter: false,
+          order: 'DESC',
+        },
+      };
+    }
+
+    const beforeLimit = Math.floor((limit - 1) / 2);
+    const afterLimit = limit - 1 - beforeLimit;
+    const [before, anchorMessage, after] = await Promise.all([
+      this.getMessagesBeforeAnchor(roomId, readAnchor.message, beforeLimit),
+      this.getMessageById(roomId, readAnchor.message.id),
+      this.getMessagesAfterAnchor(roomId, readAnchor.message, afterLimit),
+    ]);
+
+    const olderMessages = [...before.data].reverse();
+    const data = [...olderMessages, anchorMessage, ...after.data];
+
+    return {
+      data,
+      meta: {
+        limit,
+        aroundLastRead: true,
+        anchorMessageId: readAnchor.message.id,
+        anchorSource: readAnchor.source,
+        nextBefore: before.hasMore ? olderMessages[0]?.id : undefined,
+        nextAfter: after.hasMore ? after.data[after.data.length - 1]?.id : undefined,
+        hasMoreBefore: before.hasMore,
+        hasMoreAfter: after.hasMore,
+        order: 'ASC',
+      },
+    };
+  }
+
+  private usesMessageIdPagination(paginationDto: RoomMessagesQueryDto) {
+    return Boolean(paginationDto.before || paginationDto.after || paginationDto.aroundLastRead);
+  }
+
+  private assertSingleMessagePaginationMode(paginationDto: RoomMessagesQueryDto) {
+    const modes = [
+      paginationDto.cursor,
+      paginationDto.before,
+      paginationDto.after,
+      paginationDto.aroundLastRead,
+    ].filter(Boolean);
+
+    if (modes.length > 1) {
+      throw new BadRequestException('Use only one of cursor, before, after, or aroundLastRead');
+    }
+  }
+
+  private getMessagePageLimit(limit?: number) {
+    return Math.min(limit || 20, 50);
+  }
+
+  private async getLatestMessages(roomId: ID, limit: number) {
+    return this.getMessagePage(
+      this.createMessageQuery()
+        .where('message.chatRoomId = :roomId', { roomId })
+        .orderBy('message.createdAt', 'DESC')
+        .addOrderBy('message.id', 'DESC'),
+      limit,
+    );
+  }
+
+  private async findMessageAnchor(roomId: ID, messageId: ID): Promise<MessageAnchor> {
+    const message = await this.messageRepository.findOne({
+      where: { id: messageId, chatRoomId: roomId },
+      select: { id: true, createdAt: true },
+    });
+
+    if (!message) {
+      throw new NotFoundException('Message anchor not found');
+    }
+
+    return message;
+  }
+
+  private async getMessageById(roomId: ID, messageId: ID) {
+    const message = await this.createMessageQuery()
+      .where('message.id = :messageId', { messageId })
+      .andWhere('message.chatRoomId = :roomId', { roomId })
+      .getOne();
+
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    return message;
+  }
+
+  private async getMessagesBeforeAnchor(roomId: ID, anchor: MessageAnchor, limit: number) {
+    return this.getMessagePage(
+      this.createMessageQuery()
+        .where('message.chatRoomId = :roomId', { roomId })
+        .andWhere(
+          '(message.createdAt < :anchorCreatedAt OR (message.createdAt = :anchorCreatedAt AND message.id < :anchorId))',
+          { anchorCreatedAt: anchor.createdAt, anchorId: anchor.id },
+        )
+        .orderBy('message.createdAt', 'DESC')
+        .addOrderBy('message.id', 'DESC'),
+      limit,
+    );
+  }
+
+  private async getMessagesAfterAnchor(roomId: ID, anchor: MessageAnchor, limit: number) {
+    return this.getMessagePage(
+      this.createMessageQuery()
+        .where('message.chatRoomId = :roomId', { roomId })
+        .andWhere(
+          '(message.createdAt > :anchorCreatedAt OR (message.createdAt = :anchorCreatedAt AND message.id > :anchorId))',
+          { anchorCreatedAt: anchor.createdAt, anchorId: anchor.id },
+        )
+        .orderBy('message.createdAt', 'ASC')
+        .addOrderBy('message.id', 'ASC'),
+      limit,
+    );
+  }
+
+  private async getMessagePage(qb: ReturnType<ChatService['createMessageQuery']>, limit: number) {
+    if (limit <= 0) {
+      return { data: [], hasMore: false };
+    }
+
+    const messages = await qb.take(limit + 1).getMany();
+    const hasMore = messages.length > limit;
+
+    return {
+      data: hasMore ? messages.slice(0, limit) : messages,
+      hasMore,
+    };
+  }
+
+  private async findLastReadAnchor(
+    userId: ID,
+    roomId: ID,
+  ): Promise<{ message: MessageAnchor; source: ReadAnchorSource } | null> {
+    const readState = await this.chatRoomReadRepository.findOne({
+      where: { chatRoomId: roomId, userId },
+      relations: ['lastReadMessage'],
+    });
+
+    if (!readState) {
+      return null;
+    }
+
+    if (readState.lastReadMessage) {
+      return {
+        message: readState.lastReadMessage,
+        source: 'lastReadMessageId',
+      };
+    }
+
+    if (!readState.lastReadAt) {
+      return null;
+    }
+
+    const messageBeforeOrAtLastRead = await this.messageRepository
+      .createQueryBuilder('message')
+      .select(['message.id', 'message.createdAt'])
+      .where('message.chatRoomId = :roomId', { roomId })
+      .andWhere(
+        "message.createdAt < (CAST(:lastReadAt AS timestamptz) + INTERVAL '1 millisecond')",
+        {
+          lastReadAt: readState.lastReadAt,
+        },
+      )
+      .orderBy('message.createdAt', 'DESC')
+      .addOrderBy('message.id', 'DESC')
+      .getOne();
+
+    if (messageBeforeOrAtLastRead) {
+      return {
+        message: messageBeforeOrAtLastRead,
+        source: 'lastReadAt',
+      };
+    }
+
+    const messageAfterLastRead = await this.messageRepository
+      .createQueryBuilder('message')
+      .select(['message.id', 'message.createdAt'])
+      .where('message.chatRoomId = :roomId', { roomId })
+      .andWhere('message.createdAt > :lastReadAt', { lastReadAt: readState.lastReadAt })
+      .orderBy('message.createdAt', 'ASC')
+      .addOrderBy('message.id', 'ASC')
+      .getOne();
+
+    if (messageAfterLastRead) {
+      return {
+        message: messageAfterLastRead,
+        source: 'lastReadAtAfter',
+      };
+    }
+
+    return null;
   }
 
   async getUnreadMessages(userId: ID) {

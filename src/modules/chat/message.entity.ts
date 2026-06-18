@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -11,6 +12,7 @@ import { User } from '@modules/user/user.entity';
 import { ChatRoom } from './chat-room.entity';
 
 @Entity()
+@Index('idx_message_chat_room_created_at_id', ['chatRoomId', 'createdAt', 'id'])
 export class Message {
   @PrimaryGeneratedColumn('uuid')
   id: ID;

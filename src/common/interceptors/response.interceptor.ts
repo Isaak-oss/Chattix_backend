@@ -3,10 +3,16 @@ import { map } from 'rxjs/operators';
 import { Observable } from 'rxjs';
 
 export type Meta = {
-  total?: number;
   limit?: number;
-  offset?: number;
+  cursor?: string;
+  nextCursor?: string;
+  before?: string;
+  after?: string;
+  nextBefore?: string;
+  nextAfter?: string;
   hasMore?: boolean;
+  hasMoreBefore?: boolean;
+  hasMoreAfter?: boolean;
   [key: string]: any;
 };
 

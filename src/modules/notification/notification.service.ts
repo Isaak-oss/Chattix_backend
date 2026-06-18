@@ -25,10 +25,9 @@ export class NotificationService {
   getMyNotifications(userId: ID, paginationDto: PaginationDto) {
     const qb = this.notificationRepository
       .createQueryBuilder('notification')
-      .where('notification.userId = :userId', { userId })
-      .orderBy('notification.createdAt', 'DESC');
+      .where('notification.userId = :userId', { userId });
 
-    return paginate(qb, paginationDto);
+    return paginate(qb, paginationDto, { alias: 'notification', cursorColumn: 'createdAt' });
   }
 
   async getNotificationsCount(userId: ID) {

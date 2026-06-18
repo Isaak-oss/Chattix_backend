@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -10,6 +11,7 @@ import { User } from '@modules/user/user.entity';
 import { NotificationType } from './notification.types';
 
 @Entity()
+@Index('idx_notification_user_created_at_id', ['userId', 'createdAt', 'id'])
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: ID;

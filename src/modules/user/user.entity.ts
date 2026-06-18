@@ -6,6 +6,7 @@ import {
   OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Post } from '../post/post.entity';
 import { Exclude } from 'class-transformer';
@@ -14,6 +15,7 @@ import { ChatRoom } from '@modules/chat/chat-room.entity';
 import { Notification } from '@modules/notification/notification.entity';
 
 @Entity()
+@Index('idx_user_created_at_id', ['createdAt', 'id'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: ID;

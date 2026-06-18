@@ -111,7 +111,7 @@ export class FriendService {
   }
 
   async getFriends(userId: ID, friendQueryDto: FriendQueryDto) {
-    const { status, limit, offset } = friendQueryDto;
+    const { status } = friendQueryDto;
 
     const qb = this.friendRepository.createQueryBuilder('friend');
 
@@ -136,7 +136,10 @@ export class FriendService {
       });
     }
 
-    const { data, meta } = await paginate(qb, { limit, offset });
+    const { data, meta } = await paginate(qb, friendQueryDto, {
+      alias: 'friend',
+      cursorColumn: 'createdAt',
+    });
 
     const friends = data.map((friend) => {
       const isRequester = friend.requester.id === userId;
@@ -179,10 +182,9 @@ export class FriendService {
 
         return `NOT EXISTS ${subQuery}`;
       })
-      .orderBy('user.createdAt', 'DESC')
-      .addOrderBy('user.id', 'ASC');
+      .orderBy('user.createdAt', 'DESC');
 
-    const result = await paginate(qb, paginationDto);
+    const result = await paginate(qb, paginationDto, { alias: 'user', cursorColumn: 'createdAt' });
 
     return {
       ...result,

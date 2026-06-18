@@ -25,6 +25,7 @@ import {
   MessageResponseDto,
   UnreadMessagesResponseDto,
   CreateGroupChatRoomDto,
+  RoomMessagesQueryDto,
 } from './chat.dto';
 import { ChatService } from './chat.service';
 import {
@@ -111,7 +112,7 @@ export class ChatController {
   getRoomMessages(
     @Req() request: Request,
     @Param() params: ChatRoomParamsDto,
-    @Query() dto: PaginationDto,
+    @Query() dto: RoomMessagesQueryDto,
   ) {
     return this.chatService.getRoomMessages(request['user']?.id, params.roomId, dto);
   }

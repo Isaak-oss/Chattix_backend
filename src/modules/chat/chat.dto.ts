@@ -1,4 +1,14 @@
-import { ArrayMinSize, IsArray, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { PaginationDto } from '@common/lib/paginate/paginate.dto';
+import { Transform } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserResponseDto } from '@modules/user/user.dto';
 import { ChatRoomType } from './chat-room.entity';
@@ -33,6 +43,34 @@ export class MarkChatRoomReadDto {
   @IsOptional()
   @IsString()
   lastReadMessageId?: ID;
+}
+
+export class RoomMessagesQueryDto extends PaginationDto {
+  @ApiPropertyOptional({
+    example: '7b4f0ac0-5e96-4e7c-8b4b-96a1d8b82294',
+    description: 'Returns messages older than this message.',
+  })
+  @IsOptional()
+  @IsString()
+  before?: ID = undefined;
+
+  @ApiPropertyOptional({
+    example: '7b4f0ac0-5e96-4e7c-8b4b-96a1d8b82294',
+    description: 'Returns messages newer than this message.',
+  })
+  @IsOptional()
+  @IsString()
+  after?: ID = undefined;
+
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'Returns a message window around the user read state. Falls back to lastReadAt if lastReadMessageId was deleted.',
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  aroundLastRead?: boolean;
 }
 
 export class CreateChatRoomDto {

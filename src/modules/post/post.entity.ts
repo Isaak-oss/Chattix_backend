@@ -6,10 +6,13 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../user/user.entity';
 
 @Entity()
+@Index('idx_post_created_at_id', ['createdAt', 'id'])
+@Index('idx_post_author_created_at_id', ['authorId', 'createdAt', 'id'])
 export class Post {
   @PrimaryGeneratedColumn('uuid')
   id: ID;

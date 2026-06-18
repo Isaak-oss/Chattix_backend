@@ -20,6 +20,7 @@ export enum ChatRoomType {
 
 @Entity()
 @Index(['directKey'], { unique: true, where: '"directKey" IS NOT NULL' })
+@Index('idx_chat_room_updated_at_id', ['updatedAt', 'id'])
 export class ChatRoom {
   @PrimaryGeneratedColumn('uuid')
   id: ID;

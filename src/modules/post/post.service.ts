@@ -16,18 +16,18 @@ export class PostService {
   getAllFeed(paginationDto: PaginationDto) {
     const qb = this.postRepository
       .createQueryBuilder('post')
-      .leftJoinAndSelect('post.author', 'author')
-      .orderBy('post.createdAt', 'DESC');
-    return paginate(qb, paginationDto);
+      .leftJoinAndSelect('post.author', 'author');
+
+    return paginate(qb, paginationDto, { alias: 'post', cursorColumn: 'createdAt' });
   }
 
   getMyPosts(userId: ID, paginationDto: PaginationDto) {
     const qb = this.postRepository
       .createQueryBuilder('post')
       .leftJoinAndSelect('post.author', 'author')
-      .where('post.authorId = :userId', { userId })
-      .orderBy('post.createdAt', 'DESC');
-    return paginate(qb, paginationDto);
+      .where('post.authorId = :userId', { userId });
+
+    return paginate(qb, paginationDto, { alias: 'post', cursorColumn: 'createdAt' });
   }
 
   async create(createPostDto: CreatePostDto, userId: ID) {
