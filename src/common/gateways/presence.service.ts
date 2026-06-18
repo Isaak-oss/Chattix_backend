@@ -11,6 +11,11 @@ export type FriendPresenceDto = {
   lastSeenAt: Date;
 };
 
+type PresenceUser = Pick<
+  User,
+  'id' | 'email' | 'name' | 'bio' | 'lastSeenAt' | 'createdAt' | 'updatedAt'
+>;
+
 @Injectable()
 export class PresenceService {
   constructor(
@@ -23,14 +28,32 @@ export class PresenceService {
 
   async handleUserConnected(userId: ID) {
     const lastSeenAt = new Date();
-    await this.userRepository.update(userId, { lastSeenAt });
-    await this.emitPresenceToFriends(userId, true, lastSeenAt);
+    const user = await this.updateLastSeenAt(userId, lastSeenAt);
+    await this.emitPresenceToFriends(user, true);
   }
 
   async handleUserDisconnected(userId: ID) {
     const lastSeenAt = new Date();
-    await this.userRepository.update(userId, { lastSeenAt });
-    await this.emitPresenceToFriends(userId, false, lastSeenAt);
+    const user = await this.updateLastSeenAt(userId, lastSeenAt);
+    await this.emitPresenceToFriends(user, false);
+  }
+
+  async handleUserOnlineStatusChanged(userId: ID, isOnline: boolean) {
+    const changed = this.realtimeEvents.setUserOnline(userId, isOnline);
+    const lastSeenAt = new Date();
+    const user = await this.updateLastSeenAt(userId, lastSeenAt);
+    const effectiveIsOnline = this.realtimeEvents.isOnline(userId);
+
+    if (changed) {
+      await this.emitPresenceToFriends(user, effectiveIsOnline);
+    }
+
+    return {
+      data: {
+        ...user,
+        isOnline: effectiveIsOnline,
+      },
+    };
   }
 
   async getFriendsOnlineStatus(userId: ID) {
@@ -47,19 +70,32 @@ export class PresenceService {
     return users.map((user) => this.createPresencePayload(user.id, user.lastSeenAt));
   }
 
-  private async emitPresenceToFriends(userId: ID, isOnline: boolean, lastSeenAt: Date) {
-    const friendIds = await this.getAcceptedFriendIds(userId);
+  private async emitPresenceToFriends(user: PresenceUser, isOnline: boolean) {
+    const friendIds = await this.getAcceptedFriendIds(user.id);
+
     if (friendIds.length === 0) {
       return;
     }
 
     this.realtimeEvents.emitToUsers(friendIds, 'friends:presence', {
       data: {
-        userId,
+        ...user,
         isOnline,
-        lastSeenAt,
+        lastSeenAt: user.lastSeenAt,
       },
     });
+  }
+
+  private async updateLastSeenAt(userId: ID, lastSeenAt: Date): Promise<PresenceUser> {
+    const result = await this.userRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ lastSeenAt })
+      .where('id = :userId', { userId })
+      .returning(['id', 'email', 'name', 'bio', 'lastSeenAt', 'createdAt', 'updatedAt'])
+      .execute();
+
+    return result.raw[0] as PresenceUser;
   }
 
   private createPresencePayload(userId: ID, lastSeenAt: Date): FriendPresenceDto {

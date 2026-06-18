@@ -16,6 +16,7 @@ import { ChatGateway } from './chat.gateway';
 import { ChatRoom, ChatRoomType } from './chat-room.entity';
 import { ChatRoomRead } from './chat-room-read.entity';
 import { Message } from './message.entity';
+import { RealtimeEventsService } from '@common/gateways/realtime-events.service';
 
 @Injectable()
 export class ChatService {
@@ -30,6 +31,7 @@ export class ChatService {
     private readonly userRepository: Repository<User>,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   async createRoom(ownerId: ID, dto: CreateChatRoomDto) {
@@ -187,12 +189,10 @@ export class ChatService {
     ]);
 
     return {
-      data: {
-        readState,
-        lastMessage,
-        unreadMessagesCount: counts.unreadMessagesCount,
-        totalUnreadMessagesCount: counts.totalUnreadMessagesCount,
-      },
+      readState,
+      lastMessage,
+      unreadMessagesCount: counts.unreadMessagesCount,
+      totalUnreadMessagesCount: counts.totalUnreadMessagesCount,
     };
   }
 
@@ -546,7 +546,7 @@ export class ChatService {
   private withoutDirectKey(room: ChatRoom) {
     const { directKey, ...publicRoom } = this.withResolvedType(room);
     void directKey;
-    return publicRoom;
+    return this.withParticipantsOnlineStatus(publicRoom);
   }
 
   private withResolvedType(room: ChatRoom) {
@@ -557,6 +557,16 @@ export class ChatService {
     return {
       ...room,
       type: room.directKey ? ChatRoomType.DIRECT : ChatRoomType.GROUP,
+    };
+  }
+
+  private withParticipantsOnlineStatus<T extends Omit<ChatRoom, 'directKey'>>(room: T) {
+    return {
+      ...room,
+      participants: room.participants?.map((participant) => ({
+        ...participant,
+        isOnline: this.realtimeEvents.isOnline(participant.id),
+      })),
     };
   }
 

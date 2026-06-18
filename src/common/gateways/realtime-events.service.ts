@@ -12,6 +12,7 @@ export class RealtimeEventsService {
   private server?: Server;
   private readonly handlers = new Map<string, RealtimeHandler>();
   private readonly socketsByUser = new Map<ID, Set<string>>();
+  private readonly manuallyOfflineUsers = new Set<ID>();
 
   bindServer(server: Server) {
     this.server = server;
@@ -46,29 +47,43 @@ export class RealtimeEventsService {
   }
 
   addUserSocket(userId: ID, socketId: string) {
+    const wasOnline = this.isOnline(userId);
     const userSockets = this.socketsByUser.get(userId) ?? new Set<string>();
-    const wasOffline = userSockets.size === 0;
     userSockets.add(socketId);
     this.socketsByUser.set(userId, userSockets);
+    this.manuallyOfflineUsers.delete(userId);
 
-    return wasOffline;
+    return !wasOnline && this.isOnline(userId);
   }
 
   removeUserSocket(userId: ID, socketId: string) {
+    const wasOnline = this.isOnline(userId);
     const userSockets = this.socketsByUser.get(userId);
     if (!userSockets) return false;
 
     userSockets.delete(socketId);
     if (userSockets.size === 0) {
       this.socketsByUser.delete(userId);
-      return true;
+      this.manuallyOfflineUsers.delete(userId);
     }
 
-    return false;
+    return wasOnline && !this.isOnline(userId);
+  }
+
+  setUserOnline(userId: ID, isOnline: boolean) {
+    const wasOnline = this.isOnline(userId);
+
+    if (isOnline) {
+      this.manuallyOfflineUsers.delete(userId);
+    } else {
+      this.manuallyOfflineUsers.add(userId);
+    }
+
+    return wasOnline !== this.isOnline(userId);
   }
 
   isOnline(userId: ID) {
-    return this.socketsByUser.has(userId);
+    return this.socketsByUser.has(userId) && !this.manuallyOfflineUsers.has(userId);
   }
 
   private getUserRoom(userId: ID) {

@@ -11,6 +11,10 @@ import type { AuthenticatedSocket } from './authenticated.gateway';
 import { RealtimeEventsService } from './realtime-events.service';
 import { PresenceService } from './presence.service';
 
+type UserOnlinePayload = {
+  isOnline?: boolean;
+};
+
 @WebSocketGateway({
   namespace: 'realtime',
   cors: {
@@ -78,5 +82,26 @@ export class RealtimeGateway extends AuthenticatedGateway {
     const statuses = await this.presenceService.getFriendsOnlineStatus(userId);
 
     return { data: statuses };
+  }
+
+  @SubscribeMessage('user:online')
+  async handleUserOnline(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: UserOnlinePayload,
+  ) {
+    const userId = client.user?.id;
+    if (!userId) {
+      const payload = { message: 'Unauthorized' };
+      client.emit('realtime:error', payload);
+      return { error: payload };
+    }
+
+    if (typeof body?.isOnline !== 'boolean') {
+      const payload = { message: 'isOnline must be a boolean' };
+      client.emit('realtime:error', payload);
+      return { error: payload };
+    }
+
+    return this.presenceService.handleUserOnlineStatusChanged(userId, body.isOnline);
   }
 }
