@@ -77,7 +77,7 @@ export class ChatService {
   }
 
   async getMyRooms(userId: ID, paginationDto: PaginationDto) {
-    const qb = this.createRoomResponseQuery(userId)
+    const qb = this.createRoomResponseQuery({ excludeReadStatesUserId: userId })
       .innerJoin('room.participants', 'currentUser', 'currentUser.id = :userId', { userId })
       .orderBy('room.updatedAt', 'DESC');
 
@@ -95,7 +95,7 @@ export class ChatService {
   }
 
   private async findRoomResponseForUser(userId: ID, roomId: ID) {
-    const room = await this.createRoomResponseQuery(userId)
+    const room = await this.createRoomResponseQuery({ readStatesUserId: userId })
       .where('room.id = :roomId', { roomId })
       .getOne();
 
@@ -179,7 +179,8 @@ export class ChatService {
   }
 
   async createRoomReadEventPayload(userId: ID, roomId: ID, readState: unknown) {
-    const [lastMessage, counts] = await Promise.all([
+    const [chatRoom, lastMessage, counts] = await Promise.all([
+      this.findRoomResponseForUser(userId, roomId),
       this.createMessageQuery()
         .where('message.chatRoomId = :roomId', { roomId })
         .orderBy('message.createdAt', 'DESC')
@@ -190,6 +191,7 @@ export class ChatService {
 
     return {
       readState,
+      chatRoom,
       lastMessage,
       unreadMessagesCount: counts.unreadMessagesCount,
       totalUnreadMessagesCount: counts.totalUnreadMessagesCount,
@@ -236,7 +238,10 @@ export class ChatService {
     });
   }
 
-  private createRoomResponseQuery(userId: ID) {
+  private createRoomResponseQuery(options?: {
+    readStatesUserId?: ID;
+    excludeReadStatesUserId?: ID;
+  }) {
     const lastMessageSubQuery = this.messageRepository
       .createQueryBuilder('lastMessageSub')
       .select('lastMessageSub.id')
@@ -246,7 +251,7 @@ export class ChatService {
       .limit(1)
       .getQuery();
 
-    return this.chatRoomRepository
+    const qb = this.chatRoomRepository
       .createQueryBuilder('room')
       .addSelect('room.directKey')
       .leftJoinAndSelect('room.participants', 'participants')
@@ -256,10 +261,27 @@ export class ChatService {
         'lastMessage',
         `lastMessage.id = (${lastMessageSubQuery})`,
       )
-      .leftJoinAndSelect('lastMessage.sender', 'lastMessageSender')
-      .leftJoinAndSelect('room.readStates', 'readStates', 'readStates.userId = :userId', {
-        userId,
-      });
+      .leftJoinAndSelect('lastMessage.sender', 'lastMessageSender');
+
+    if (options?.readStatesUserId) {
+      return qb.leftJoinAndSelect(
+        'room.readStates',
+        'readStates',
+        'readStates.userId = :readStatesUserId',
+        { readStatesUserId: options.readStatesUserId },
+      );
+    }
+
+    if (options?.excludeReadStatesUserId) {
+      return qb.leftJoinAndSelect(
+        'room.readStates',
+        'readStates',
+        'readStates.userId != :excludeReadStatesUserId',
+        { excludeReadStatesUserId: options.excludeReadStatesUserId },
+      );
+    }
+
+    return qb.leftJoinAndSelect('room.readStates', 'readStates');
   }
 
   private async attachUnreadMessagesCount(userId: ID, room: ChatRoom) {

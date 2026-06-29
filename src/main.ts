@@ -12,7 +12,7 @@ async function bootstrap() {
     origin: process.env.GATEWAY_ORIGIN?.split(','),
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    allowedHeaders: 'Content-Type, Authorization',
+    allowedHeaders: 'Content-Type, Authorization, ngrok-skip-browser-warning',
   });
 
   app.useGlobalPipes(

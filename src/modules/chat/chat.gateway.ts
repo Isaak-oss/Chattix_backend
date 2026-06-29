@@ -5,7 +5,9 @@ import { ChatService } from './chat.service';
 
 interface MarkRoomReadPayload {
   roomId?: ID;
+  chatRoomId?: ID;
   lastReadMessageId?: ID;
+  messageId?: ID;
 }
 
 type ChatSocket = AuthenticatedSocket<GatewayUser>;
@@ -36,7 +38,7 @@ export class ChatGateway implements OnModuleInit {
         throw new Error('Unauthorized');
       }
 
-      const roomId = body?.roomId;
+      const roomId = body?.roomId ?? body?.chatRoomId;
       if (!roomId) {
         throw new Error('roomId is required');
       }
@@ -44,12 +46,21 @@ export class ChatGateway implements OnModuleInit {
       const readState = await this.chatService.markRoomReadState(
         userId,
         roomId,
-        body.lastReadMessageId,
+        body.lastReadMessageId ?? body.messageId,
       );
       const participantIds = await this.chatService.getRoomParticipantIds(roomId);
       const payload = await this.createRoomReadPayload(userId, roomId, readState);
 
-      this.realtimeEvents.emitToUsers(participantIds, 'chats:read', payload);
+      await Promise.all(
+        participantIds.map(async (participantId) => {
+          const participantPayload =
+            participantId === userId
+              ? payload
+              : await this.createRoomReadPayload(participantId, roomId, readState);
+
+          this.realtimeEvents.emitToUser(participantId, 'chats:read', participantPayload);
+        }),
+      );
 
       return payload;
     } catch (error) {

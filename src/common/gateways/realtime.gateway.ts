@@ -70,6 +70,11 @@ export class RealtimeGateway extends AuthenticatedGateway {
     return this.realtimeEvents.handle('chats:read', client, body);
   }
 
+  @SubscribeMessage('chat:read')
+  handleChatRead(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() body: unknown) {
+    return this.realtimeEvents.handle('chats:read', client, body);
+  }
+
   @SubscribeMessage('friends:onlineStatus')
   async handleFriendsOnlineStatus(@ConnectedSocket() client: AuthenticatedSocket) {
     const userId = client.user?.id;
