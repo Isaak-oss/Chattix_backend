@@ -1,14 +1,31 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { ProfileVisibility, WhoCanMessage } from './user.entity';
 
 export class ChangeUserDto {
   @IsString()
   @IsOptional()
-  name?: string;
+  @MinLength(3)
+  @MaxLength(120)
+  fullName?: string;
+
+  @IsString()
+  @IsOptional()
+  @MinLength(3)
+  @MaxLength(30)
+  username?: string;
 
   @IsString()
   @IsOptional()
   bio?: string;
+
+  @IsEnum(ProfileVisibility)
+  @IsOptional()
+  profileVisibility?: ProfileVisibility;
+
+  @IsEnum(WhoCanMessage)
+  @IsOptional()
+  whoCanMessage?: WhoCanMessage;
 }
 
 export class UserResponseDto {
@@ -22,12 +39,23 @@ export class UserResponseDto {
 
   @ApiProperty()
   @IsString()
-  name: string;
+  fullName: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  username?: string;
 
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
   bio?: string;
+
+  @ApiProperty({ enum: ProfileVisibility })
+  profileVisibility: ProfileVisibility;
+
+  @ApiProperty({ enum: WhoCanMessage })
+  whoCanMessage: WhoCanMessage;
 
   @ApiProperty()
   @IsString()

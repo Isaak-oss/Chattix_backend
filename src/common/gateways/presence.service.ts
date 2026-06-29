@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Friend, FriendStatus } from '@modules/friend/friend.entity';
 import { User } from '@modules/user/user.entity';
@@ -13,7 +13,16 @@ export type FriendPresenceDto = {
 
 type PresenceUser = Pick<
   User,
-  'id' | 'email' | 'name' | 'bio' | 'lastSeenAt' | 'createdAt' | 'updatedAt'
+  | 'id'
+  | 'email'
+  | 'fullName'
+  | 'username'
+  | 'bio'
+  | 'profileVisibility'
+  | 'whoCanMessage'
+  | 'lastSeenAt'
+  | 'createdAt'
+  | 'updatedAt'
 >;
 
 @Injectable()
@@ -87,15 +96,34 @@ export class PresenceService {
   }
 
   private async updateLastSeenAt(userId: ID, lastSeenAt: Date): Promise<PresenceUser> {
-    const result = await this.userRepository
+    await this.userRepository
       .createQueryBuilder()
       .update(User)
       .set({ lastSeenAt })
       .where('id = :userId', { userId })
-      .returning(['id', 'email', 'name', 'bio', 'lastSeenAt', 'createdAt', 'updatedAt'])
       .execute();
 
-    return result.raw[0] as PresenceUser;
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: [
+        'id',
+        'email',
+        'fullName',
+        'username',
+        'bio',
+        'profileVisibility',
+        'whoCanMessage',
+        'lastSeenAt',
+        'createdAt',
+        'updatedAt',
+      ],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user as PresenceUser;
   }
 
   private createPresencePayload(userId: ID, lastSeenAt: Date): FriendPresenceDto {

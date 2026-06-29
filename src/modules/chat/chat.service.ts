@@ -45,7 +45,7 @@ export class ChatService {
     const room =
       (await this.findDirectRoomByKey(directKey)) ??
       (await this.findAndClaimLegacyDirectRoom(ownerId, dto.to, directKey)) ??
-      (await this.createDirectRoom(directKey, participant?.name, participants));
+      (await this.createDirectRoom(directKey, participant?.fullName, participants));
     await this.ensureDirectRoomType(room);
 
     const firstMessage = await this.createMessageInRoom(ownerId, room, dto.firstMessage);

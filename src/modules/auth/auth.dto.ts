@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SignInDto {
@@ -17,7 +17,14 @@ export class SignUpDto {
 
   @IsString()
   @MinLength(3, { message: 'Name is Required' })
-  name: string;
+  @MaxLength(120)
+  fullName: string;
+
+  @IsString()
+  @MinLength(3, { message: 'Username must be at least 3 characters long' })
+  @MaxLength(30)
+  @IsOptional()
+  username?: string;
 
   @IsString()
   @MinLength(6, { message: 'Password must be at least 6 characters long' })

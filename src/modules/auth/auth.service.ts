@@ -83,14 +83,14 @@ export class AuthService {
 
   async signInWithGoogle(googleToken: string) {
     // get google confirmation
-    const { email: emailByGoogleToken, name: nameByGoogleToken } =
+    const { email: emailByGoogleToken, fullName: fullNameByGoogleToken } =
       await this.googleAuthService(googleToken);
     const hasUser = await this.userService.findOne(emailByGoogleToken, false);
     if (!hasUser) {
       await this.signUp({
         email: emailByGoogleToken,
         withOutPassword: true,
-        name: nameByGoogleToken,
+        fullName: fullNameByGoogleToken ?? emailByGoogleToken,
       });
     }
     return this.signIn({
@@ -112,7 +112,7 @@ export class AuthService {
       }
 
       const data = await response.json();
-      return { email: data?.email, name: data?.name };
+      return { email: data?.email, fullName: data?.name };
     } catch (error) {
       console.error('Ошибка:', error);
       throw error;
