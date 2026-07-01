@@ -25,6 +25,15 @@ export class ChatRoomParamsDto {
   roomId: ID;
 }
 
+export class ChatRoomByParticipantQueryDto {
+  @ApiProperty({
+    example: '2bf8f28d-7df6-42e9-b0e9-ecf8f61d43f3',
+    description: 'Second participant user id. The first participant is the authenticated user.',
+  })
+  @IsString()
+  participantId: ID;
+}
+
 export class MarkChatRoomReadDto {
   @ApiPropertyOptional({
     example: '7b4f0ac0-5e96-4e7c-8b4b-96a1d8b82294',

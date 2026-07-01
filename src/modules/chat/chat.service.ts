@@ -94,6 +94,27 @@ export class ChatService {
     return this.findRoomResponseForUser(userId, roomId);
   }
 
+  async getRoomByParticipant(userId: ID, participantId: ID) {
+    if (userId === participantId) {
+      throw new BadRequestException('Cannot get a direct chat with yourself');
+    }
+
+    await this.findUsersByIdsOrFail([userId, participantId]);
+
+    const directKey = this.createDirectKey(userId, participantId);
+    const room =
+      (await this.findDirectRoomByKey(directKey)) ??
+      (await this.findAndClaimLegacyDirectRoom(userId, participantId, directKey));
+
+    if (!room) {
+      throw new NotFoundException('Chat room not found');
+    }
+
+    await this.ensureDirectRoomType(room);
+
+    return this.findRoomResponseForUser(userId, room.id);
+  }
+
   private async findRoomResponseForUser(userId: ID, roomId: ID) {
     const room = await this.createRoomResponseQuery({ readStatesUserId: userId })
       .where('room.id = :roomId', { roomId })

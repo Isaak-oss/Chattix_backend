@@ -16,6 +16,7 @@ import { PaginationDto } from '@common/lib/paginate/paginate.dto';
 import { AuthGuard } from '@modules/auth/auth.guard';
 import {
   ChatRoomReadResponseDto,
+  ChatRoomByParticipantQueryDto,
   ChatRoomParamsDto,
   ChatRoomResponseDto,
   CreateChatRoomDto,
@@ -32,7 +33,7 @@ import {
   ApiWrappedCreatedResponse,
   ApiWrappedOkResponse,
 } from '@common/swagger/api-response.decorator';
-import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('chats')
 @Controller('chats')
@@ -75,6 +76,30 @@ export class ChatController {
   @Get('rooms')
   getMyRooms(@Req() request: Request, @Query() dto: PaginationDto) {
     return this.chatService.getMyRooms(request['user']?.id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Get direct chat room by participant',
+    description:
+      'Returns the direct room for the authenticated user and the participantId query value.',
+  })
+  @ApiQuery({
+    name: 'participantId',
+    description: 'Second participant user id. The first participant is the authenticated user.',
+    example: '2bf8f28d-7df6-42e9-b0e9-ecf8f61d43f3',
+  })
+  @ApiWrappedOkResponse({ type: ChatRoomResponseDto })
+  @UseGuards(AuthGuard)
+  @Get('roomByParticipant/:participantId')
+  async getRoomByParticipant(
+    @Req() request: Request,
+    @Param() params: ChatRoomByParticipantQueryDto,
+  ) {
+    const room = await this.chatService.getRoomByParticipant(
+      request['user']?.id,
+      params.participantId,
+    );
+    return { data: room };
   }
 
   @ApiOperation({ summary: 'Get chat room by id' })
